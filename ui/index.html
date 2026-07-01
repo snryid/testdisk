@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mini TestDisk</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Mini TestDisk</h1>
+    <p class="subtitle">Rust + Tauri 可行性验证 — 分区表分析与文件系统检测</p>
+  </header>
+
+  <section class="toolbar">
+    <label>
+      选择磁盘/镜像
+      <select id="disk-select">
+        <option value="">-- 加载中 --</option>
+      </select>
+    </label>
+    <button id="btn-refresh">刷新磁盘列表</button>
+    <button id="btn-open-image">打开磁盘镜像...</button>
+    <button id="btn-scan" class="primary">分析分区</button>
+  </section>
+
+  <section id="disk-info" class="info-panel hidden"></section>
+  <section id="warnings" class="warnings hidden"></section>
+
+  <main class="grid">
+    <div class="panel">
+      <h2>分区表</h2>
+      <div id="table-type" class="badge">-</div>
+      <table id="partitions-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>名称</th>
+            <th>起始 LBA</th>
+            <th>大小</th>
+            <th>类型</th>
+            <th>文件系统</th>
+            <th>状态</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h2>丢失/删除分区 (深度扫描)</h2>
+      <p class="hint">在 1MB 边界搜索文件系统签名，类似 TestDisk Deeper Search</p>
+      <table id="lost-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>名称</th>
+            <th>起始 LBA</th>
+            <th>大小</th>
+            <th>文件系统</th>
+            <th>来源</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer>
+    <p>基于 <a href="https://github.com/cgsecurity/testdisk">cgsecurity/testdisk</a> 核心思路的简化实现</p>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>

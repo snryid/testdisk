@@ -1,0 +1,10 @@
+[package]
+name = "testdisk-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+byteorder = "1.5"
+crc32fast = "1.4"
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
