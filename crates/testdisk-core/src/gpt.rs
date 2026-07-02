@@ -72,7 +72,10 @@ fn read_utf16_name(raw: &[u8]) -> String {
     String::from_utf16_lossy(&chars)
 }
 
-pub fn read_gpt(disk: &mut DiskReader, header_lba: u64) -> Result<GptTable, crate::disk::DiskError> {
+pub fn read_gpt(
+    disk: &mut DiskReader,
+    header_lba: u64,
+) -> Result<GptTable, crate::disk::DiskError> {
     let header_sector = disk.read_sector(header_lba)?;
     let mut cursor = Cursor::new(&header_sector);
 
@@ -88,17 +91,39 @@ pub fn read_gpt(disk: &mut DiskReader, header_lba: u64) -> Result<GptTable, crat
         });
     }
 
-    let _revision = cursor.read_u32::<LittleEndian>().map_err(std::io::Error::other)?;
-    let header_size = cursor.read_u32::<LittleEndian>().map_err(std::io::Error::other)? as usize;
-    let crc_stored = cursor.read_u32::<LittleEndian>().map_err(std::io::Error::other)?;
-    let _reserved = cursor.read_u32::<LittleEndian>().map_err(std::io::Error::other)?;
-    let _lba_self = cursor.read_u64::<LittleEndian>().map_err(std::io::Error::other)?;
-    let _lba_alt = cursor.read_u64::<LittleEndian>().map_err(std::io::Error::other)?;
-    let _lba_start = cursor.read_u64::<LittleEndian>().map_err(std::io::Error::other)?;
-    let _lba_end = cursor.read_u64::<LittleEndian>().map_err(std::io::Error::other)?;
-    let lba_table = cursor.read_u64::<LittleEndian>().map_err(std::io::Error::other)?;
-    let entry_count = cursor.read_u32::<LittleEndian>().map_err(std::io::Error::other)?;
-    let entry_size = cursor.read_u32::<LittleEndian>().map_err(std::io::Error::other)?;
+    let _revision = cursor
+        .read_u32::<LittleEndian>()
+        .map_err(std::io::Error::other)?;
+    let header_size = cursor
+        .read_u32::<LittleEndian>()
+        .map_err(std::io::Error::other)? as usize;
+    let crc_stored = cursor
+        .read_u32::<LittleEndian>()
+        .map_err(std::io::Error::other)?;
+    let _reserved = cursor
+        .read_u32::<LittleEndian>()
+        .map_err(std::io::Error::other)?;
+    let _lba_self = cursor
+        .read_u64::<LittleEndian>()
+        .map_err(std::io::Error::other)?;
+    let _lba_alt = cursor
+        .read_u64::<LittleEndian>()
+        .map_err(std::io::Error::other)?;
+    let _lba_start = cursor
+        .read_u64::<LittleEndian>()
+        .map_err(std::io::Error::other)?;
+    let _lba_end = cursor
+        .read_u64::<LittleEndian>()
+        .map_err(std::io::Error::other)?;
+    let lba_table = cursor
+        .read_u64::<LittleEndian>()
+        .map_err(std::io::Error::other)?;
+    let entry_count = cursor
+        .read_u32::<LittleEndian>()
+        .map_err(std::io::Error::other)?;
+    let entry_size = cursor
+        .read_u32::<LittleEndian>()
+        .map_err(std::io::Error::other)?;
 
     let mut disk_guid_bytes = [0u8; 16];
     cursor

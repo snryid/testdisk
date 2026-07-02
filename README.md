@@ -11,6 +11,9 @@
 - 文件系统签名检测：FAT、NTFS、exFAT、ext2/3/4、APFS、HFS/HFS+
 - 深度扫描：在 1 MB 边界搜索丢失分区（简化版 Deeper Search）
 - macOS 外置/USB 磁盘整盘格式化，可选择 APFS、ExFAT、FAT32、Mac OS Extended
+- 标准化磁盘目标元数据：平台 ID、显示路径、读取路径、访问能力、安全分类
+- 扫描结果可导出为 JSON 报告
+- 前端支持明暗主题切换与中英文切换，面向实际磁盘恢复工作流
 
 > 分区分析为只读流程。格式化是破坏性写盘操作，当前仅允许 macOS 外置/USB 整盘格式化，不包含分区写入修复与 PhotoRec 文件雕刻。
 
@@ -156,11 +159,17 @@ testdisk/
 ├── Cargo.toml               # Workspace 根
 ├── crates/
 │   └── testdisk-core/       # 核心库（分区表 + 文件系统检测）
+│       ├── domain.rs
 │       ├── disk.rs
 │       ├── mbr.rs
 │       ├── gpt.rs
 │       ├── fs_detect.rs
+│       ├── report.rs
 │       └── scanner.rs
+│   └── testdisk-platform/   # 平台适配层（枚举 / 镜像 / 格式化入口）
+│       ├── adapter.rs
+│       ├── disk.rs
+│       └── formatter.rs
 ├── src-tauri/               # Tauri 后端（IPC 命令）
 │   ├── src/lib.rs
 │   └── tauri.conf.json
@@ -170,6 +179,7 @@ testdisk/
 │   ├── index.html
 │   ├── src/
 │   │   ├── App.vue
+│   │   ├── i18n.js
 │   │   └── main.js
 │   ├── styles.css
 └── testdata/
@@ -181,15 +191,23 @@ testdisk/
 ```
 ┌─────────────────────────────────────┐
 │  ui/          Tauri WebView 前端     │
+│  App.vue + i18n + theme state        │
 └──────────────┬──────────────────────┘
                │ invoke (IPC)
 ┌──────────────▼──────────────────────┐
 │  src-tauri/   Tauri 命令层           │
 │  get_disks / scan_disk_path / ...   │
+│  依赖平台适配层，不直接拼平台命令   │
+└──────────────┬──────────────────────┘
+               │
+┌──────────────▼──────────────────────┐
+│  testdisk-platform/ 平台适配层      │
+│  磁盘枚举 · 镜像打开 · 格式化入口   │
 └──────────────┬──────────────────────┘
                │
 ┌──────────────▼──────────────────────┐
 │  testdisk-core/  纯 Rust 核心库      │
+│  domain · platform · scanner · report│
 │  MBR · GPT · FS 检测 · 深度扫描      │
 └──────────────┬──────────────────────┘
                │ 只读
@@ -222,6 +240,18 @@ testdisk/
 | Mac OS Extended (Journaled) | 老 macOS / HFS+ 设备兼容 |
 
 执行前必须在界面中输入目标磁盘路径进行二次确认。格式化会删除目标磁盘全部数据。
+
+## RFC 路线图
+
+项目路线图位于 [`RFC/`](RFC/)，中文版本位于 [`RFC/zh-CN/`](RFC/zh-CN/)。
+
+当前 `feat/rfc-0001-roadmap` 分支已落地 RFC-0001 Phase 0 的基础能力：
+
+- 扩展后端 `DiskInfo`，增加跨平台目标元数据和安全分类字段。
+- 增加 `ScanReport` JSON schema，并支持从 GUI 导出扫描报告。
+- 前端增加“目标信息”面板，展示平台 ID、显示路径、读取路径、协议、访问能力和安全分类。
+- 前端增加主题和语言切换，所有可见文案开始通过统一 i18n 映射管理。
+- 核心 Rust 代码按 domain / platform / scanner / report 分层拆分，避免继续把共享模型和平台逻辑堆在单一文件中。
 
 ## 与原版 TestDisk 对比
 

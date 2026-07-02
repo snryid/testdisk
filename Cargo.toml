@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/testdisk-core", "src-tauri"]
+members = ["crates/testdisk-core", "crates/testdisk-platform", "src-tauri"]
 resolver = "2"
 
 [workspace.package]

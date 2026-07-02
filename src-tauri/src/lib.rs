@@ -1,6 +1,7 @@
-use testdisk_core::{
-    disk_info_from_image, format_disk, format_filesystem_options, list_disks, scan_disk, DiskInfo,
-    FormatDiskRequest, FormatDiskResult, FormatFilesystemOption, ScanResult,
+use testdisk_core::{scan_disk, scan_report_json, ScanResult};
+use testdisk_platform::{
+    disk_info_from_image, format_disk, format_filesystem_options, list_disks, DiskInfo,
+    FormatDiskRequest, FormatDiskResult, FormatFilesystemOption,
 };
 
 #[tauri::command]
@@ -28,6 +29,12 @@ fn format_disk_path(request: FormatDiskRequest) -> Result<FormatDiskResult, Stri
     format_disk(request).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn export_scan_report_json(path: String, result: ScanResult) -> Result<(), String> {
+    let json = scan_report_json(result).map_err(|e| e.to_string())?;
+    std::fs::write(path, json).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -47,7 +54,8 @@ pub fn run() {
             scan_disk_path,
             open_image,
             get_format_filesystems,
-            format_disk_path
+            format_disk_path,
+            export_scan_report_json
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

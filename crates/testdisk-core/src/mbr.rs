@@ -54,8 +54,12 @@ pub fn read_mbr(disk: &mut DiskReader) -> Result<MbrTable, crate::disk::DiskErro
         cursor.set_position(cursor.position() + 3);
         let part_type = cursor.read_u8().map_err(std::io::Error::other)?;
         cursor.set_position(cursor.position() + 3);
-        let start_lba = cursor.read_u32::<LittleEndian>().map_err(std::io::Error::other)? as u64;
-        let sector_count = cursor.read_u32::<LittleEndian>().map_err(std::io::Error::other)? as u64;
+        let start_lba = cursor
+            .read_u32::<LittleEndian>()
+            .map_err(std::io::Error::other)? as u64;
+        let sector_count = cursor
+            .read_u32::<LittleEndian>()
+            .map_err(std::io::Error::other)? as u64;
 
         if part_type != 0 {
             partitions.push(MbrPartition {
@@ -71,7 +75,9 @@ pub fn read_mbr(disk: &mut DiskReader) -> Result<MbrTable, crate::disk::DiskErro
         }
     }
 
-    let sig = cursor.read_u16::<LittleEndian>().map_err(std::io::Error::other)?;
+    let sig = cursor
+        .read_u16::<LittleEndian>()
+        .map_err(std::io::Error::other)?;
     Ok(MbrTable {
         partitions,
         signature_valid: sig == 0xAA55,
@@ -79,7 +85,5 @@ pub fn read_mbr(disk: &mut DiskReader) -> Result<MbrTable, crate::disk::DiskErro
 }
 
 pub fn is_gpt_protective_mbr(mbr: &MbrTable) -> bool {
-    mbr.partitions
-        .iter()
-        .any(|p| p.partition_type == 0xee)
+    mbr.partitions.iter().any(|p| p.partition_type == 0xee)
 }

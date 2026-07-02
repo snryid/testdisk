@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use crate::domain::{AccessCapability, DiskInfo, DiskKind, DiskSource, TargetSafety};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
@@ -16,20 +16,37 @@ pub enum DiskError {
     PermissionDenied(String),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DiskInfo {
-    pub path: String,
-    pub name: String,
-    pub size_bytes: u64,
-    pub readable: bool,
-    pub source: DiskSource,
+pub fn classify_target_safety(
+    source: DiskSource,
+    is_internal: Option<bool>,
+    is_removable: Option<bool>,
+    protocol: Option<&str>,
+) -> TargetSafety {
+    if matches!(source, DiskSource::ImageFile) {
+        return TargetSafety::Image;
+    }
+    if is_internal == Some(true) {
+        return TargetSafety::Internal;
+    }
+    if is_removable == Some(true) {
+        return TargetSafety::Removable;
+    }
+    if protocol
+        .map(|value| value.eq_ignore_ascii_case("usb"))
+        .unwrap_or(false)
+        || is_internal == Some(false)
+    {
+        return TargetSafety::External;
+    }
+    TargetSafety::Unknown
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DiskSource {
-    System,
-    ImageFile,
+pub fn access_capability(readable: bool, writable: bool) -> AccessCapability {
+    match (readable, writable) {
+        (true, true) => AccessCapability::ReadWrite,
+        (true, false) => AccessCapability::ReadOnly,
+        (false, _) => AccessCapability::RequiresElevation,
+    }
 }
 
 /// Block device reader — supports disk images and raw devices.
@@ -114,13 +131,15 @@ fn list_disks_macos() -> Vec<DiskInfo> {
                 .to_string();
             let path = platform_device_path(&display_path);
             let readable = File::open(&path).is_ok();
-            disks.push(DiskInfo {
-                name: display_path.clone(),
+            disks.push(system_disk_info(
+                display_path.clone(),
                 path,
-                size_bytes: disk_size(&display_path).unwrap_or(0),
+                disk_size(&display_path).unwrap_or(0),
                 readable,
-                source: DiskSource::System,
-            });
+                None,
+                None,
+                None,
+            ));
         }
     }
 
@@ -147,13 +166,15 @@ fn list_disks_linux() -> Vec<DiskInfo> {
             {
                 let path = format!("/dev/{name}");
                 let readable = File::open(&path).is_ok();
-                disks.push(DiskInfo {
-                    name: name.clone(),
-                    path: path.clone(),
-                    size_bytes: disk_size(&path).unwrap_or(0),
+                disks.push(system_disk_info(
+                    path.clone(),
+                    path.clone(),
+                    disk_size(&path).unwrap_or(0),
                     readable,
-                    source: DiskSource::System,
-                });
+                    None,
+                    None,
+                    None,
+                ));
             }
         }
     }
@@ -167,15 +188,60 @@ fn fallback_disk_paths() -> Vec<DiskInfo> {
         .map(|display_path| {
             let path = platform_device_path(&display_path);
             let readable = File::open(&path).is_ok();
-            DiskInfo {
-                name: display_path.clone(),
+            system_disk_info(
+                display_path.clone(),
                 path,
-                size_bytes: disk_size(&display_path).unwrap_or(0),
+                disk_size(&display_path).unwrap_or(0),
                 readable,
-                source: DiskSource::System,
-            }
+                None,
+                None,
+                None,
+            )
         })
         .collect()
+}
+
+fn system_disk_info(
+    display_path: String,
+    raw_path: String,
+    size_bytes: u64,
+    readable: bool,
+    protocol: Option<String>,
+    is_internal: Option<bool>,
+    is_removable: Option<bool>,
+) -> DiskInfo {
+    let platform_id = platform_id_from_path(&display_path);
+    let safety = classify_target_safety(
+        DiskSource::System,
+        is_internal,
+        is_removable,
+        protocol.as_deref(),
+    );
+
+    DiskInfo {
+        path: raw_path.clone(),
+        display_path: display_path.clone(),
+        raw_path,
+        platform_id,
+        name: display_path,
+        size_bytes,
+        readable,
+        writable: false,
+        source: DiskSource::System,
+        kind: DiskKind::Physical,
+        safety,
+        access: access_capability(readable, false),
+        protocol,
+        is_internal,
+        is_removable,
+    }
+}
+
+fn platform_id_from_path(path: &str) -> String {
+    path.strip_prefix("/dev/")
+        .or_else(|| path.strip_prefix(r"\\.\"))
+        .unwrap_or(path)
+        .to_string()
 }
 
 fn platform_device_path(path: &str) -> String {
@@ -239,12 +305,89 @@ pub fn disk_info_from_image(path: &str) -> Result<DiskInfo, DiskError> {
     let meta = std::fs::metadata(path)?;
     Ok(DiskInfo {
         path: path.to_string(),
+        display_path: path.to_string(),
+        raw_path: path.to_string(),
+        platform_id: path.to_string(),
         name: Path::new(path)
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| path.to_string()),
         size_bytes: meta.len(),
         readable: true,
+        writable: !meta.permissions().readonly(),
         source: DiskSource::ImageFile,
+        kind: DiskKind::Image,
+        safety: TargetSafety::Image,
+        access: access_capability(true, !meta.permissions().readonly()),
+        protocol: Some("file".to_string()),
+        is_internal: Some(false),
+        is_removable: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn classifies_image_targets_as_image_safety() {
+        assert_eq!(
+            classify_target_safety(DiskSource::ImageFile, None, None, None),
+            TargetSafety::Image
+        );
+    }
+
+    #[test]
+    fn classifies_internal_system_disks_as_internal() {
+        assert_eq!(
+            classify_target_safety(
+                DiskSource::System,
+                Some(true),
+                Some(false),
+                Some("PCI-Express")
+            ),
+            TargetSafety::Internal
+        );
+    }
+
+    #[test]
+    fn classifies_usb_and_removable_disks() {
+        assert_eq!(
+            classify_target_safety(DiskSource::System, Some(false), Some(false), Some("USB")),
+            TargetSafety::External
+        );
+        assert_eq!(
+            classify_target_safety(DiskSource::System, None, Some(true), None),
+            TargetSafety::Removable
+        );
+    }
+
+    #[test]
+    fn maps_access_flags_to_stable_capability() {
+        assert_eq!(access_capability(true, true), AccessCapability::ReadWrite);
+        assert_eq!(access_capability(true, false), AccessCapability::ReadOnly);
+        assert_eq!(
+            access_capability(false, false),
+            AccessCapability::RequiresElevation
+        );
+    }
+
+    #[test]
+    fn builds_system_disk_info_with_normalized_fields() {
+        let info = system_disk_info(
+            "/dev/disk4".to_string(),
+            "/dev/rdisk4".to_string(),
+            1024,
+            true,
+            Some("USB".to_string()),
+            Some(false),
+            Some(true),
+        );
+
+        assert_eq!(info.platform_id, "disk4");
+        assert_eq!(info.display_path, "/dev/disk4");
+        assert_eq!(info.raw_path, "/dev/rdisk4");
+        assert_eq!(info.safety, TargetSafety::Removable);
+        assert_eq!(info.access, AccessCapability::ReadOnly);
+    }
 }

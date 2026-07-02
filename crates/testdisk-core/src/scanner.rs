@@ -1,41 +1,8 @@
 use crate::disk::{DiskError, DiskReader, SECTOR_SIZE};
+use crate::domain::{PartitionResult, PartitionTableType, ScanResult};
 use crate::fs_detect::{detect_filesystem, FilesystemInfo};
-use crate::gpt::{detect_gpt, GptTable};
-use crate::mbr::{is_gpt_protective_mbr, read_mbr, MbrTable};
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum PartitionTableType {
-    Gpt,
-    Mbr,
-    Unknown,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PartitionResult {
-    pub index: u32,
-    pub name: String,
-    pub start_lba: u64,
-    pub end_lba: u64,
-    pub size_bytes: u64,
-    pub type_name: String,
-    pub filesystem: Option<FilesystemInfo>,
-    pub status: String,
-    pub source: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ScanResult {
-    pub disk_path: String,
-    pub disk_size: u64,
-    pub partition_table_type: PartitionTableType,
-    pub mbr: Option<MbrTable>,
-    pub gpt: Option<GptTable>,
-    pub partitions: Vec<PartitionResult>,
-    pub lost_partitions: Vec<PartitionResult>,
-    pub warnings: Vec<String>,
-}
+use crate::gpt::detect_gpt;
+use crate::mbr::{is_gpt_protective_mbr, read_mbr};
 
 /// Main scan — mirrors TestDisk's autodetect_arch + read_part flow.
 pub fn scan_disk(path: &str) -> Result<ScanResult, DiskError> {
@@ -211,7 +178,7 @@ mod tests {
 
     fn create_test_mbr_image(path: &str) {
         let mut img = vec![0u8; 4 * 1024 * 1024]; // 4MB image
-        // MBR signature
+                                                  // MBR signature
         img[510] = 0x55;
         img[511] = 0xAA;
         // Partition 1: FAT32 at LBA 2048, 2048 sectors
@@ -235,7 +202,10 @@ mod tests {
         let path = "/tmp/testdisk_test.img";
         create_test_mbr_image(path);
         let result = scan_disk(path).unwrap();
-        assert!(matches!(result.partition_table_type, PartitionTableType::Mbr));
+        assert!(matches!(
+            result.partition_table_type,
+            PartitionTableType::Mbr
+        ));
         assert!(!result.partitions.is_empty());
         assert!(result.partitions[0].filesystem.is_some());
         let _ = std::fs::remove_file(path);

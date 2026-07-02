@@ -1,13 +1,17 @@
 mod disk;
+mod domain;
 mod formatter;
 mod fs_detect;
 mod gpt;
 mod mbr;
+mod report;
 mod scanner;
 
 pub use disk::*;
+pub use domain::*;
 pub use formatter::*;
 pub use fs_detect::*;
 pub use gpt::*;
 pub use mbr::*;
+pub use report::*;
 pub use scanner::*;

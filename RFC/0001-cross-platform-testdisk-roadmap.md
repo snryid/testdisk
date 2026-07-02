@@ -76,6 +76,14 @@ The core should model disks, partitions, volumes, and images separately:
 
 Partition parsing, signature detection, scan planning, and result modeling should live in `testdisk-core`. OS-specific access should live behind adapter traits used by the Tauri command layer or a dedicated platform crate.
 
+### Enterprise Rust Structure
+
+Rust code should use enterprise-style layered modules instead of mixing responsibilities in large files. Domain models, scanners, platform adapters, operation workflows, reporting schemas, and Tauri IPC handlers should live behind clear boundaries. Shared core code must stay deterministic and fixture-testable; platform command execution and destructive workflows must not be embedded inside parsing logic.
+
+### Human-Centered UI
+
+The frontend should be designed as a practical recovery workstation. It must support persistent light/dark theme switching and Chinese/English language switching. New UI work should route visible text through a translation layer, distinguish loading/empty/error/permission/risk states clearly, and keep destructive actions visually isolated from read-only analysis.
+
 ### Safety by Default
 
 Dangerous operations must require:

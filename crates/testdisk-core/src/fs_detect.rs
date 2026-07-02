@@ -62,7 +62,9 @@ fn detect_fat(data: &[u8]) -> Option<FilesystemInfo> {
         let oem = String::from_utf8_lossy(&data[3..11]).trim().to_string();
         let sectors_per_cluster = data.get(13)?;
         if *sectors_per_cluster > 0 && *sectors_per_cluster <= 128 {
-            let fat_type = if oem.starts_with("FAT32") || data.get(66).map(|b| *b & 0xF0 == 0x00).unwrap_or(false) {
+            let fat_type = if oem.starts_with("FAT32")
+                || data.get(66).map(|b| *b & 0xF0 == 0x00).unwrap_or(false)
+            {
                 "FAT32"
             } else if oem.starts_with("FAT16") || oem.starts_with("MSWIN") {
                 "FAT16"

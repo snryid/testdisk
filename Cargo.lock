@@ -87,6 +87,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-log",
  "testdisk-core",
+ "testdisk-platform",
 ]
 
 [[package]]
@@ -3566,6 +3567,17 @@ dependencies = [
  "crc32fast",
  "plist",
  "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "testdisk-platform"
+version = "0.1.0"
+dependencies = [
+ "plist",
+ "serde",
+ "testdisk-core",
  "thiserror 2.0.18",
 ]
 
