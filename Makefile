@@ -14,6 +14,7 @@ SHELL := /usr/bin/env bash
 PROJECT_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 CARGO        ?= cargo
 TAURI        ?= $(CARGO) tauri
+NPM          ?= npm
 
 # Detect host OS (Darwin / Linux / MINGW* / MSYS* / CYGWIN*)
 UNAME_S := $(shell uname -s 2>/dev/null || echo Unknown)
@@ -38,6 +39,8 @@ endif
 
 RUST_VERSION := $(shell rustc --version 2>/dev/null || echo "not installed")
 TAURI_VERSION := $(shell $(CARGO) tauri --version 2>/dev/null || echo "not installed")
+NODE_VERSION := $(shell node --version 2>/dev/null || echo "not installed")
+NPM_VERSION := $(shell $(NPM) --version 2>/dev/null || echo "not installed")
 
 .PHONY: help check install-tauri-cli dev build build-debug build-macos build-linux build-windows \
         test test-core sample-image clean info
@@ -53,7 +56,11 @@ help: ## Show available targets
 check: ## Verify Rust and Tauri CLI are installed
 	@echo "Rust:  $(RUST_VERSION)"
 	@echo "Tauri: $(TAURI_VERSION)"
+	@echo "Node:  $(NODE_VERSION)"
+	@echo "npm:   $(NPM_VERSION)"
 	@command -v $(CARGO) >/dev/null 2>&1 || { echo "Error: cargo not found. Install Rust: https://rustup.rs"; exit 1; }
+	@command -v node >/dev/null 2>&1 || { echo "Error: node not found. Install Node.js: https://nodejs.org"; exit 1; }
+	@command -v $(NPM) >/dev/null 2>&1 || { echo "Error: npm not found. Install Node.js: https://nodejs.org"; exit 1; }
 	@$(CARGO) tauri --version >/dev/null 2>&1 || { \
 		echo "Error: cargo tauri not found. Run: make install-tauri-cli"; \
 		exit 1; \

@@ -1,4 +1,7 @@
-use testdisk_core::{disk_info_from_image, list_disks, scan_disk, DiskInfo, ScanResult};
+use testdisk_core::{
+    disk_info_from_image, format_disk, format_filesystem_options, list_disks, scan_disk, DiskInfo,
+    FormatDiskRequest, FormatDiskResult, FormatFilesystemOption, ScanResult,
+};
 
 #[tauri::command]
 fn get_disks() -> Vec<DiskInfo> {
@@ -13,6 +16,16 @@ fn scan_disk_path(path: String) -> Result<ScanResult, String> {
 #[tauri::command]
 fn open_image(path: String) -> Result<DiskInfo, String> {
     disk_info_from_image(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_format_filesystems() -> Vec<FormatFilesystemOption> {
+    format_filesystem_options()
+}
+
+#[tauri::command]
+fn format_disk_path(request: FormatDiskRequest) -> Result<FormatDiskResult, String> {
+    format_disk(request).map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -32,7 +45,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_disks,
             scan_disk_path,
-            open_image
+            open_image,
+            get_format_filesystems,
+            format_disk_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

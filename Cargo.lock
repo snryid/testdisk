@@ -3564,6 +3564,7 @@ version = "0.1.0"
 dependencies = [
  "byteorder",
  "crc32fast",
+ "plist",
  "serde",
  "thiserror 2.0.18",
 ]

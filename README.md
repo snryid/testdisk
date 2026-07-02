@@ -10,14 +10,16 @@
 - GPT 头 CRC32 校验
 - 文件系统签名检测：FAT、NTFS、exFAT、ext2/3/4、APFS、HFS/HFS+
 - 深度扫描：在 1 MB 边界搜索丢失分区（简化版 Deeper Search）
+- macOS 外置/USB 磁盘整盘格式化，可选择 APFS、ExFAT、FAT32、Mac OS Extended
 
-> 当前为**只读分析**原型，不包含分区写入修复与 PhotoRec 文件雕刻。
+> 分区分析为只读流程。格式化是破坏性写盘操作，当前仅允许 macOS 外置/USB 整盘格式化，不包含分区写入修复与 PhotoRec 文件雕刻。
 
 ## 系统要求
 
 | 依赖 | 版本 |
 |------|------|
 | Rust | ≥ 1.77（推荐通过 [rustup](https://rustup.rs/) 安装） |
+| Node.js / npm | Node.js ≥ 20（用于 Vue 前端构建） |
 | Tauri CLI | 2.x（`cargo install tauri-cli --locked`） |
 
 ### 平台额外依赖
@@ -48,6 +50,7 @@ git clone <repo-url> testdisk && cd testdisk
 
 # 2. 检查工具链
 make check
+npm install
 
 # 若缺少 Tauri CLI：
 make install-tauri-cli
@@ -161,10 +164,14 @@ testdisk/
 ├── src-tauri/               # Tauri 后端（IPC 命令）
 │   ├── src/lib.rs
 │   └── tauri.conf.json
-├── ui/                      # 前端（HTML / CSS / JS）
+├── package.json             # Vue / Vite 前端依赖与脚本
+├── vite.config.js           # Vite 构建配置
+├── ui/                      # Vue 前端
 │   ├── index.html
+│   ├── src/
+│   │   ├── App.vue
+│   │   └── main.js
 │   ├── styles.css
-│   └── main.js
 └── testdata/
     └── sample-mbr.img       # make sample-image 生成
 ```
@@ -194,12 +201,27 @@ testdisk/
 ## 权限说明
 
 - **磁盘镜像**：普通用户即可读写分析。
-- **物理磁盘**（如 `/dev/disk0`）：macOS / Linux 通常需要 root 权限：
+- **物理磁盘**（如 `/dev/disk0`）：macOS / Linux 通常需要 root 权限。macOS 对 `/dev/disk*` 原始块设备不会弹出普通应用授权窗口；如果列表中磁盘显示为“需权限”，请用管理员权限启动开发版，或先制作磁盘镜像再分析：
 
   ```bash
   # macOS 示例（谨慎操作，只读打开）
   sudo make dev
   ```
+
+## 格式化说明
+
+格式化功能当前只支持 macOS 外置/USB 整盘格式化。后端会通过 `diskutil info -plist` 校验目标磁盘，拒绝格式化内置磁盘、未知磁盘和分区设备（如 `disk4s1`）。
+
+支持的文件系统：
+
+| 文件系统 | 适用场景 |
+|----------|----------|
+| APFS | macOS 当前主流格式 |
+| ExFAT | macOS / Windows / Linux 跨平台 U 盘 |
+| MS-DOS FAT32 | 老设备兼容，单文件 4GB 限制 |
+| Mac OS Extended (Journaled) | 老 macOS / HFS+ 设备兼容 |
+
+执行前必须在界面中输入目标磁盘路径进行二次确认。格式化会删除目标磁盘全部数据。
 
 ## 与原版 TestDisk 对比
 
