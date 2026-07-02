@@ -30,16 +30,16 @@ jobs:
         include:
           - platform: macos-latest
             target: aarch64-apple-darwin
-            args: '--target aarch64-apple-darwin'
+            args: '--bundles app --target aarch64-apple-darwin'
           - platform: macos-latest
             target: x86_64-apple-darwin
-            args: '--target x86_64-apple-darwin'
+            args: '--bundles app --target x86_64-apple-darwin'
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            args: ''
+            args: '--bundles deb'
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
-            args: ''
+            args: '--bundles msi'
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -56,10 +56,15 @@ jobs:
             patchelf \
             xdg-utils
 
-      - name: Install Rust stable
+      - name: Install Rust stable (macOS)
         uses: dtolnay/rust-toolchain@stable
+        if: matrix.platform == 'macos-latest'
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Install Rust stable (default)
+        if: matrix.platform != 'macos-latest'
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -93,10 +98,10 @@ jobs:
 
             | 平台 | 文件 |
             |------|------|
-            | macOS (Apple Silicon) | `.dmg` / `.app` (aarch64) |
-            | macOS (Intel) | `.dmg` / `.app` (x86_64) |
-            | Linux | `.deb` / `.AppImage` |
-            | Windows | `.msi` / `.exe` (NSIS) |
+            | macOS (Apple Silicon) | `.app` (aarch64) |
+            | macOS (Intel) | `.app` (x86_64) |
+            | Linux | `.deb` |
+            | Windows | `.msi` |
 
             > macOS 未签名应用首次打开：系统设置 → 隐私与安全性 → 仍要打开
 
