@@ -120,7 +120,7 @@ fn build_format_plan(request: &FormatDiskRequest) -> Result<FormatOperationPlan,
     let filesystem_token = filesystem_command_token(&request.filesystem);
 
     Ok(FormatOperationPlan {
-        platform: platform_name().to_string(),
+        platform: std::env::consts::OS.to_string(),
         target_path: target_path.clone(),
         target_id: target_id.clone(),
         filesystem: request.filesystem.clone(),
@@ -134,25 +134,6 @@ fn build_format_plan(request: &FormatDiskRequest) -> Result<FormatOperationPlan,
             &request.filesystem,
         )?,
     })
-}
-
-fn platform_name() -> &'static str {
-    #[cfg(target_os = "macos")]
-    {
-        return "macos";
-    }
-    #[cfg(target_os = "linux")]
-    {
-        return "linux";
-    }
-    #[cfg(target_os = "windows")]
-    {
-        return "windows";
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-    {
-        "unsupported"
-    }
 }
 
 fn execute_format_plan(plan: FormatOperationPlan) -> Result<FormatDiskResult, FormatError> {
@@ -230,13 +211,14 @@ fn run_command(step: &FormatCommandStep) -> Result<CommandOutput, FormatError> {
 }
 
 fn build_steps(
-    _target: &DiskInfo,
-    target_id: &str,
+    target: &DiskInfo,
+    _target_id: &str,
     _target_path: &str,
     filesystem_token: &str,
     volume_name: &str,
-    _filesystem: &FormatFilesystem,
+    filesystem: &FormatFilesystem,
 ) -> Result<Vec<FormatCommandStep>, FormatError> {
+    let _ = (target, filesystem);
     #[cfg(target_os = "macos")]
     {
         return Ok(vec![
@@ -246,7 +228,7 @@ fn build_steps(
                 args: vec![
                     "unmountDisk".to_string(),
                     "force".to_string(),
-                    target_id.to_string(),
+                    _target_id.to_string(),
                 ],
             },
             FormatCommandStep {
@@ -256,13 +238,13 @@ fn build_steps(
                     "eraseDisk".to_string(),
                     filesystem_token.to_string(),
                     volume_name.to_string(),
-                    target_id.to_string(),
+                    _target_id.to_string(),
                 ],
             },
             FormatCommandStep {
                 name: "verify".to_string(),
                 program: "diskutil".to_string(),
-                args: vec!["verifyDisk".to_string(), target_id.to_string()],
+                args: vec!["verifyDisk".to_string(), _target_id.to_string()],
             },
             FormatCommandStep {
                 name: "rescan".to_string(),
@@ -270,7 +252,7 @@ fn build_steps(
                 args: vec![
                     "info".to_string(),
                     "-plist".to_string(),
-                    target_id.to_string(),
+                    _target_id.to_string(),
                 ],
             },
         ]);
@@ -286,7 +268,7 @@ fn build_steps(
             FormatCommandStep {
                 name: "format".to_string(),
                 program: filesystem_token.to_string(),
-                args: filesystem_args(_filesystem, volume_name, _target_path),
+                args: filesystem_args(filesystem, volume_name, _target_path),
             },
             FormatCommandStep {
                 name: "verify".to_string(),
@@ -352,7 +334,7 @@ fn build_steps(
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {
-        let _ = (target_id, filesystem_token, volume_name, filesystem);
+        let _ = (filesystem_token, volume_name, filesystem);
         Err(FormatError::UnsupportedPlatform)
     }
 }

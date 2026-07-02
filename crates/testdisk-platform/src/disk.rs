@@ -401,6 +401,34 @@ fn lsblk_device_to_target(device: LsblkDevice) -> Option<NormalizedTarget> {
 }
 
 #[cfg(target_os = "linux")]
+fn mountpoints_present(
+    mountpoint: Option<&String>,
+    mountpoints: Option<&Vec<Option<String>>>,
+) -> bool {
+    if mountpoint.is_some() {
+        return true;
+    }
+
+    mountpoints
+        .into_iter()
+        .flat_map(|entries| entries.iter())
+        .any(|entry| {
+            entry
+                .as_deref()
+                .map(|value| !value.is_empty())
+                .unwrap_or(false)
+        })
+}
+
+#[cfg(target_os = "linux")]
+fn is_external_protocol(protocol: &str) -> bool {
+    matches!(
+        protocol.to_ascii_lowercase().as_str(),
+        "usb" | "sata" | "sas" | "nvme" | "sdio" | "virtio" | "thunderbolt"
+    )
+}
+
+#[cfg(target_os = "linux")]
 fn fallback_linux_targets() -> Vec<NormalizedTarget> {
     let mut targets = Vec::new();
     if let Ok(entries) = fs::read_dir("/sys/block") {
