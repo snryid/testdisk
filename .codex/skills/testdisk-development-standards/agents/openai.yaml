@@ -1,0 +1,3 @@
+interface:
+  display_name: "Testdisk Development Standards"
+  short_description: "Follow Mini TestDisk Rust layering, UI theme, and i18n standards"

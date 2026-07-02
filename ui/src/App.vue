@@ -3,6 +3,11 @@ import { computed, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { filesystemLabel, partitionTableTypeLabel, t } from "./i18n";
+import DiskSidebar from "./components/DiskSidebar.vue";
+import AnalyzePanel from "./components/AnalyzePanel.vue";
+import FormatPanel from "./components/FormatPanel.vue";
+import ReportsPanel from "./components/ReportsPanel.vue";
+import SettingsPanel from "./components/SettingsPanel.vue";
 
 const THEME_STORAGE_KEY = "mini-testdisk.theme";
 const LANG_STORAGE_KEY = "mini-testdisk.lang";
@@ -20,17 +25,37 @@ const formatVolumeName = ref("UNTITLED");
 const formatConfirmation = ref("");
 const formatStatus = ref("");
 const exportStatus = ref("");
+const activeTab = ref("analyze");
 
 const theme = ref(loadPreference(THEME_STORAGE_KEY, prefersDarkTheme() ? "dark" : "light"));
 const lang = ref(loadPreference(LANG_STORAGE_KEY, "zh"));
 
 const readableDiskCount = computed(() => diskOptions.value.filter((disk) => disk.readable).length);
-const hasUnreadableSystemDisks = computed(() =>
-  diskOptions.value.some((disk) => !disk.readable && disk.source === "system")
-);
-const showMacDiskPermissionNotice = computed(() =>
-  hasUnreadableSystemDisks.value && readableDiskCount.value === 0
-);
+const unreadableDiskCount = computed(() => diskOptions.value.filter((disk) => !disk.readable).length);
+const hasAnyDisks = computed(() => diskOptions.value.length > 0);
+const listStateNotice = computed(() => {
+  if (isLoadingDisks.value || loadError.value) {
+    return null;
+  }
+
+  if (!hasAnyDisks.value) {
+    return {
+      variant: "info",
+      title: t(lang.value, "empty_list_title"),
+      body: t(lang.value, "empty_list_body"),
+    };
+  }
+
+  if (readableDiskCount.value === 0 && unreadableDiskCount.value > 0) {
+    return {
+      variant: "warning",
+      title: t(lang.value, "no_readable_disk_title"),
+      body: t(lang.value, "no_readable_disk_body"),
+    };
+  }
+
+  return null;
+});
 const selectedDisk = computed(() => diskOptions.value.find((disk) => disk.path === selectedPath.value));
 const selectedDiskAccessLabel = computed(() => {
   const access = selectedDisk.value?.access;
@@ -47,6 +72,36 @@ const selectedDiskSourceLabel = computed(() =>
       ? t(lang.value, "source_system")
       : "-"
 );
+const selectedDiskStateNotice = computed(() => {
+  const disk = selectedDisk.value;
+  if (!disk) return null;
+
+  if (disk.kind === "image" || disk.source === "image_file") {
+    return {
+      variant: "info",
+      title: t(lang.value, "image_target_title"),
+      body: t(lang.value, "image_target_body"),
+    };
+  }
+
+  if (disk.access === "read_only") {
+    return {
+      variant: "info",
+      title: t(lang.value, "read_only_target_title"),
+      body: t(lang.value, "read_only_target_body"),
+    };
+  }
+
+  if (!disk.readable || disk.access === "requires_elevation" || disk.access === "unavailable") {
+    return {
+      variant: "warning",
+      title: t(lang.value, "unreadable_target_title"),
+      body: t(lang.value, "unreadable_target_body"),
+    };
+  }
+
+  return null;
+});
 const formatConfirmationTarget = computed(() => selectedDisk.value?.path || "");
 const tableTypeLabel = computed(() => {
   const type = scanResult.value?.partition_table_type;
@@ -61,11 +116,37 @@ const localizedFormatFilesystems = computed(() =>
 const canFormat = computed(() =>
   Boolean(
     selectedDisk.value?.source === "system" &&
+      selectedDisk.value?.kind === "physical" &&
+      selectedDisk.value?.readable &&
+      selectedDisk.value?.writable &&
+      selectedDisk.value?.access === "read_write" &&
       selectedPath.value &&
       selectedFormatFilesystem.value &&
       formatVolumeName.value.trim()
   )
 );
+const formatBlockReason = computed(() => {
+  const disk = selectedDisk.value;
+  if (!disk) {
+    return t(lang.value, "format_blocked_no_target");
+  }
+  if (disk.kind === "image" || disk.source === "image_file") {
+    return t(lang.value, "format_blocked_image");
+  }
+  if (disk.access === "read_only") {
+    return t(lang.value, "format_blocked_unreadable");
+  }
+  if (!disk.readable || !disk.writable || disk.access !== "read_write") {
+    return t(lang.value, "format_blocked_unreadable");
+  }
+  return "";
+});
+const tabs = computed(() => [
+  { key: "analyze", label: t(lang.value, "tab_analyze") },
+  { key: "format", label: t(lang.value, "tab_format") },
+  { key: "reports", label: t(lang.value, "tab_reports") },
+  { key: "settings", label: t(lang.value, "tab_settings") },
+]);
 
 watch(theme, applyTheme, { immediate: true });
 watch(lang, applyLanguage, { immediate: true });
@@ -124,6 +205,28 @@ function fsLabel(partition) {
   return partition.filesystem?.fs_type || "-";
 }
 
+function diskLabel(disk) {
+  return disk.display_path || disk.name || disk.path || "-";
+}
+
+function diskOptionLabel(disk) {
+  const suffixes = [];
+  if (disk.kind === "image" || disk.source === "image_file") {
+    suffixes.push(t(lang.value, "source_image"));
+  } else {
+    suffixes.push(t(lang.value, "source_system"));
+  }
+  if (disk.access) {
+    suffixes.push(t(lang.value, `access_${disk.access}`));
+  } else if (!disk.readable) {
+    suffixes.push(t(lang.value, "access_requires_elevation"));
+  }
+  if (disk.safety) {
+    suffixes.push(t(lang.value, `safety_${disk.safety}`));
+  }
+  return `${diskLabel(disk)} · ${formatSize(disk.size_bytes)} · ${suffixes.join(" · ")}`;
+}
+
 function statusClass(status) {
   if (status === "deleted") return "status-deleted";
   if (status === "bootable") return "status-bootable";
@@ -179,6 +282,7 @@ async function scanSelected() {
   isScanning.value = true;
   try {
     scanResult.value = await invoke("scan_disk_path", { path: selectedPath.value });
+    activeTab.value = "analyze";
   } catch (error) {
     window.alert(t(lang.value, "scan_failed", { error }));
   } finally {
@@ -228,6 +332,7 @@ async function formatSelectedDisk() {
     });
     formatConfirmation.value = "";
     scanResult.value = null;
+    activeTab.value = "reports";
     await loadDisks();
   } catch (error) {
     formatStatus.value = t(lang.value, "format_failed", { error });
@@ -267,235 +372,119 @@ onMounted(() => {
 </script>
 
 <template>
-  <header class="app-header">
-    <div>
-      <p class="eyebrow">{{ t(lang, "app_name") }}</p>
-      <h1>{{ t(lang, "app_name") }}</h1>
-      <p class="subtitle">{{ t(lang, "subtitle") }}</p>
-    </div>
-    <div class="header-actions">
-      <div class="segmented" role="group" :aria-label="t(lang, 'theme_dark')">
-        <button type="button" :class="{ active: theme === 'light' }" @click="setTheme('light')">
-          {{ t(lang, "theme_light") }}
-        </button>
-        <button type="button" :class="{ active: theme === 'dark' }" @click="setTheme('dark')">
-          {{ t(lang, "theme_dark") }}
-        </button>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="app-brand">
+        <p class="eyebrow">{{ t(lang, "app_name") }}</p>
+        <h1>{{ t(lang, "app_name") }}</h1>
+        <p class="subtitle">{{ t(lang, "subtitle") }}</p>
       </div>
-      <div class="segmented" role="group" :aria-label="t(lang, 'lang_en')">
-        <button type="button" :class="{ active: lang === 'zh' }" @click="setLanguage('zh')">
-          {{ t(lang, "lang_zh") }}
-        </button>
-        <button type="button" :class="{ active: lang === 'en' }" @click="setLanguage('en')">
-          {{ t(lang, "lang_en") }}
-        </button>
+      <div class="header-actions">
+        <div class="segmented" role="group" :aria-label="t(lang, 'theme_dark')">
+          <button type="button" :class="{ active: theme === 'light' }" @click="setTheme('light')">
+            {{ t(lang, "theme_light") }}
+          </button>
+          <button type="button" :class="{ active: theme === 'dark' }" @click="setTheme('dark')">
+            {{ t(lang, "theme_dark") }}
+          </button>
+        </div>
+        <div class="segmented" role="group" :aria-label="t(lang, 'lang_en')">
+          <button type="button" :class="{ active: lang === 'zh' }" @click="setLanguage('zh')">
+            {{ t(lang, "lang_zh") }}
+          </button>
+          <button type="button" :class="{ active: lang === 'en' }" @click="setLanguage('en')">
+            {{ t(lang, "lang_en") }}
+          </button>
+        </div>
       </div>
-    </div>
-  </header>
+    </header>
 
-  <section class="toolbar">
-    <label>
-      {{ t(lang, "select_disk_label") }}
-      <select v-model="selectedPath" :disabled="isLoadingDisks">
-        <option value="">
-          {{ isLoadingDisks ? t(lang, "loading") : diskOptions.length ? t(lang, "choose_disk") : t(lang, "no_disk") }}
-        </option>
-        <option v-for="disk in diskOptions" :key="disk.path" :value="disk.path">
-          {{ disk.kind === "image" ? disk.name : disk.path }} ({{ formatSize(disk.size_bytes) }})
-          {{ disk.kind === "image" ? "[镜像]" : disk.readable ? "" : "[需权限]" }}
-        </option>
-      </select>
-    </label>
-    <button type="button" @click="loadDisks">{{ t(lang, "refresh_disks") }}</button>
-    <button type="button" @click="openImage">{{ t(lang, "open_image") }}</button>
-    <button type="button" class="primary" :disabled="isScanning" @click="scanSelected">
-      {{ isScanning ? t(lang, "analyzing") : t(lang, "analyze") }}
-    </button>
-  </section>
+    <div class="workspace">
+      <DiskSidebar
+        :disk-options="diskOptions"
+        :selected-path="selectedPath"
+        :selected-disk="selectedDisk"
+        :selected-disk-state-notice="selectedDiskStateNotice"
+        :selected-disk-source-label="selectedDiskSourceLabel"
+        :selected-disk-access-label="selectedDiskAccessLabel"
+        :selected-disk-safety-label="selectedDiskSafetyLabel"
+        :is-loading-disks="isLoadingDisks"
+        :load-error="loadError"
+        :list-state-notice="listStateNotice"
+        :readable-disk-count="readableDiskCount"
+        :has-any-disks="hasAnyDisks"
+        :lang="lang"
+        :format-size="formatSize"
+        :disk-option-label="diskOptionLabel"
+        @update:selected-path="selectedPath = $event"
+        @refresh="loadDisks"
+        @open-image="openImage"
+      />
 
-  <section v-if="selectedDisk" class="target-panel">
-    <div class="section-head">
-      <h2>{{ t(lang, "target_title") }}</h2>
-      <span class="section-subtitle">{{ t(lang, "selected_disk_prefix") }}</span>
-    </div>
-    <div class="target-grid">
-      <div>
-        <span>{{ t(lang, "platform_id") }}</span>
-        <strong>{{ selectedDisk.platform_id || "-" }}</strong>
-      </div>
-      <div>
-        <span>{{ t(lang, "display_path") }}</span>
-        <strong>{{ selectedDisk.display_path || selectedDisk.path }}</strong>
-      </div>
-      <div>
-        <span>{{ t(lang, "raw_path") }}</span>
-        <strong>{{ selectedDisk.raw_path || selectedDisk.path }}</strong>
-      </div>
-      <div>
-        <span>{{ t(lang, "source") }}</span>
-        <strong>{{ selectedDiskSourceLabel }}</strong>
-      </div>
-      <div>
-        <span>{{ t(lang, "protocol") }}</span>
-        <strong>{{ selectedDisk.protocol || "-" }}</strong>
-      </div>
-      <div>
-        <span>{{ t(lang, "access") }}</span>
-        <strong>{{ selectedDiskAccessLabel }}</strong>
-      </div>
-      <div>
-        <span>{{ t(lang, "safety") }}</span>
-        <strong>{{ selectedDiskSafetyLabel }}</strong>
-      </div>
-      <div>
-        <span>{{ t(lang, "size") }}</span>
-        <strong>{{ formatSize(selectedDisk.size_bytes) }}</strong>
-      </div>
-    </div>
-  </section>
-
-  <section class="format-panel">
-    <div class="section-head">
-      <h2>{{ t(lang, "format_title") }}</h2>
-      <span class="danger-chip">{{ t(lang, "format_title") }}</span>
-    </div>
-    <div class="format-grid">
-      <label>
-        {{ t(lang, "filesystem") }}
-        <select v-model="selectedFormatFilesystem">
-          <option
-            v-for="filesystem in localizedFormatFilesystems"
-            :key="filesystem.value"
-            :value="filesystem.value"
+      <main class="workspace-main">
+        <nav class="tab-strip" role="tablist" :aria-label="t(lang, 'app_name')">
+          <button
+            v-for="tab in tabs"
+            :key="tab.key"
+            type="button"
+            class="tab-button"
+            :class="{ active: activeTab === tab.key }"
+            @click="activeTab = tab.key"
           >
-            {{ filesystem.label }}
-          </option>
-        </select>
-      </label>
-      <label>
-        {{ t(lang, "volume_name") }}
-        <input v-model="formatVolumeName" type="text" maxlength="32" placeholder="UNTITLED" />
-      </label>
-      <label>
-        {{ t(lang, "confirm_target") }}
-        <input
-          v-model="formatConfirmation"
-          type="text"
-          :placeholder="formatConfirmationTarget || t(lang, 'choose_disk')"
-        />
-      </label>
-      <button
-        type="button"
-        class="danger"
-        :disabled="!canFormat || isFormatting"
-        @click="formatSelectedDisk"
-      >
-        {{ isFormatting ? t(lang, "formatting") : t(lang, "format_disk") }}
-      </button>
+            {{ tab.label }}
+          </button>
+        </nav>
+
+        <div class="panel-stage">
+          <AnalyzePanel
+            v-if="activeTab === 'analyze'"
+            :lang="lang"
+            :scan-result="scanResult"
+            :table-type-label="tableTypeLabel"
+            :is-scanning="isScanning"
+            :format-size="formatSize"
+            :fs-label="fsLabel"
+            :status-class="statusClass"
+            @scan="scanSelected"
+          />
+
+          <FormatPanel
+            v-else-if="activeTab === 'format'"
+            :lang="lang"
+            :selected-disk="selectedDisk"
+            :localized-format-filesystems="localizedFormatFilesystems"
+            :selected-format-filesystem="selectedFormatFilesystem"
+            :format-volume-name="formatVolumeName"
+            :format-confirmation="formatConfirmation"
+            :format-confirmation-target="formatConfirmationTarget"
+            :format-status="formatStatus"
+            :format-block-reason="formatBlockReason"
+            :can-format="canFormat"
+            :is-formatting="isFormatting"
+            @update:selected-format-filesystem="selectedFormatFilesystem = $event"
+            @update:format-volume-name="formatVolumeName = $event"
+            @update:format-confirmation="formatConfirmation = $event"
+            @format="formatSelectedDisk"
+          />
+
+          <ReportsPanel
+            v-else-if="activeTab === 'reports'"
+            :lang="lang"
+            :scan-result="scanResult"
+            :export-status="exportStatus"
+            :format-size="formatSize"
+            @export-report="exportScanReport"
+          />
+
+          <SettingsPanel
+            v-else
+            :lang="lang"
+            :theme="theme"
+            @set-theme="setTheme"
+            @set-language="setLanguage"
+          />
+        </div>
+      </main>
     </div>
-    <p class="hint">
-      {{ t(lang, "format_hint") }}
-      <strong>{{ formatConfirmationTarget || "-" }}</strong>
-    </p>
-    <p v-if="formatStatus" class="format-status">{{ formatStatus }}</p>
-  </section>
-
-  <section v-if="loadError" class="warnings">{{ loadError }}</section>
-  <section v-else-if="showMacDiskPermissionNotice" class="warnings">
-    <strong>{{ t(lang, "permission_title") }}</strong>
-    {{ t(lang, "permission_body") }}
-  </section>
-
-  <section v-if="scanResult" class="info-panel">
-    <strong>{{ scanResult.disk_path }}</strong>
-    &nbsp;·&nbsp; {{ t(lang, "size") }}: {{ formatSize(scanResult.disk_size) }}
-    &nbsp;·&nbsp; {{ t(lang, "partition_table") }}: {{ scanResult.partitions.length }}
-    &nbsp;·&nbsp; {{ t(lang, "lost_partitions") }}: {{ scanResult.lost_partitions.length }}
-    <button type="button" class="inline-action" @click="exportScanReport">
-      {{ t(lang, "report_export") }}
-    </button>
-  </section>
-  <section v-if="exportStatus" class="info-panel">{{ exportStatus }}</section>
-  <section v-if="scanResult?.warnings?.length" class="warnings">
-    <strong>{{ t(lang, "warnings") }}</strong>
-    <div v-for="warning in scanResult.warnings" :key="warning">! {{ warning }}</div>
-  </section>
-
-  <main class="grid">
-    <div class="panel">
-      <div class="section-head">
-        <h2>{{ t(lang, "partition_table") }}</h2>
-        <div class="badge">{{ tableTypeLabel }}</div>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>{{ t(lang, "name") }}</th>
-            <th>{{ t(lang, "start_lba") }}</th>
-            <th>{{ t(lang, "partition_size") }}</th>
-            <th>{{ t(lang, "partition_type") }}</th>
-            <th>{{ t(lang, "fs_table") }}</th>
-            <th>{{ t(lang, "status") }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="!scanResult?.partitions?.length" class="empty-row">
-            <td colspan="7">{{ t(lang, "empty") }}</td>
-          </tr>
-          <tr v-for="partition in scanResult?.partitions" :key="partition.index">
-            <td>{{ partition.index }}</td>
-            <td>{{ partition.name }}</td>
-            <td>{{ partition.start_lba }}</td>
-            <td>{{ formatSize(partition.size_bytes) }}</td>
-            <td>{{ partition.type_name }}</td>
-            <td>
-              <span v-if="partition.filesystem" class="fs-tag">{{ fsLabel(partition) }}</span>
-              <span v-else>-</span>
-            </td>
-            <td :class="statusClass(partition.status)">{{ partition.status }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="panel">
-      <div class="section-head">
-        <h2>{{ t(lang, "lost_partitions") }}</h2>
-        <span class="section-subtitle">{{ t(lang, "lost_hint") }}</span>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>{{ t(lang, "name") }}</th>
-            <th>{{ t(lang, "start_lba") }}</th>
-            <th>{{ t(lang, "partition_size") }}</th>
-            <th>{{ t(lang, "fs_table") }}</th>
-            <th>{{ t(lang, "source_column") }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="!scanResult?.lost_partitions?.length" class="empty-row">
-            <td colspan="6">{{ t(lang, "empty_lost") }}</td>
-          </tr>
-          <tr v-for="partition in scanResult?.lost_partitions" :key="partition.index">
-            <td>{{ partition.index }}</td>
-            <td>{{ partition.name }}</td>
-            <td>{{ partition.start_lba }}</td>
-            <td>{{ formatSize(partition.size_bytes) }}</td>
-            <td><span class="fs-tag">{{ fsLabel(partition) }}</span></td>
-            <td>{{ partition.source }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </main>
-
-  <footer>
-    <p>
-      {{ t(lang, "footer") }}
-      <a href="https://github.com/cgsecurity/testdisk">cgsecurity/testdisk</a>
-    </p>
-  </footer>
+  </div>
 </template>

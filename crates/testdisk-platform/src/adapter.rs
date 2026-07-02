@@ -1,9 +1,9 @@
-use crate::disk::{disk_info_from_image, list_disks, DiskError};
+use crate::disk::{disk_info_from_image, list_disks};
 use crate::formatter::{
     format_disk, format_filesystem_options, FormatDiskRequest, FormatDiskResult, FormatError,
     FormatFilesystemOption,
 };
-use testdisk_core::DiskInfo;
+use testdisk_core::{DiskError, DiskInfo};
 
 pub trait PlatformAdapter {
     fn list_disks(&self) -> Vec<DiskInfo>;

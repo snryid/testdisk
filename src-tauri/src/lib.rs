@@ -1,12 +1,12 @@
 use testdisk_core::{scan_disk, scan_report_json, ScanResult};
 use testdisk_platform::{
-    disk_info_from_image, format_disk, format_filesystem_options, list_disks, DiskInfo,
-    FormatDiskRequest, FormatDiskResult, FormatFilesystemOption,
+    format_disk, format_filesystem_options, host_platform_adapter, DiskInfo, FormatDiskRequest,
+    FormatDiskResult, FormatFilesystemOption, PlatformAdapter,
 };
 
 #[tauri::command]
 fn get_disks() -> Vec<DiskInfo> {
-    list_disks()
+    host_platform_adapter().list_disks()
 }
 
 #[tauri::command]
@@ -16,7 +16,9 @@ fn scan_disk_path(path: String) -> Result<ScanResult, String> {
 
 #[tauri::command]
 fn open_image(path: String) -> Result<DiskInfo, String> {
-    disk_info_from_image(&path).map_err(|e| e.to_string())
+    host_platform_adapter()
+        .open_image(&path)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
