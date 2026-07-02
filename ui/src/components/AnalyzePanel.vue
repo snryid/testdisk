@@ -7,7 +7,10 @@ defineProps({
   tableTypeLabel: { type: String, default: "-" },
   isScanning: { type: Boolean, default: false },
   formatSize: { type: Function, required: true },
+  formatConfidence: { type: Function, required: true },
   fsLabel: { type: Function, required: true },
+  partitionSourceLabel: { type: Function, required: true },
+  conflictStatusLabel: { type: Function, required: true },
   statusClass: { type: Function, required: true },
 });
 
@@ -54,12 +57,15 @@ const emit = defineEmits(["scan"]);
                 <th>{{ t(lang, "partition_size") }}</th>
                 <th>{{ t(lang, "partition_type") }}</th>
                 <th>{{ t(lang, "fs_table") }}</th>
+                <th>{{ t(lang, "source_column") }}</th>
+                <th>{{ t(lang, "confidence") }}</th>
+                <th>{{ t(lang, "conflict") }}</th>
                 <th>{{ t(lang, "status") }}</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="!scanResult?.partitions?.length" class="empty-row">
-                <td colspan="7">{{ t(lang, "empty") }}</td>
+                <td colspan="10">{{ t(lang, "empty") }}</td>
               </tr>
               <tr v-for="partition in scanResult?.partitions" :key="partition.index">
                 <td>{{ partition.index }}</td>
@@ -71,6 +77,9 @@ const emit = defineEmits(["scan"]);
                   <span v-if="partition.filesystem" class="fs-tag">{{ fsLabel(partition) }}</span>
                   <span v-else>-</span>
                 </td>
+                <td>{{ partitionSourceLabel(partition.source) }}</td>
+                <td>{{ formatConfidence(partition.confidence) }}</td>
+                <td>{{ conflictStatusLabel(partition.conflict_status) }}</td>
                 <td :class="statusClass(partition.status)">{{ partition.status }}</td>
               </tr>
             </tbody>
@@ -93,11 +102,13 @@ const emit = defineEmits(["scan"]);
                 <th>{{ t(lang, "partition_size") }}</th>
                 <th>{{ t(lang, "fs_table") }}</th>
                 <th>{{ t(lang, "source_column") }}</th>
+                <th>{{ t(lang, "confidence") }}</th>
+                <th>{{ t(lang, "conflict") }}</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="!scanResult?.lost_partitions?.length" class="empty-row">
-                <td colspan="6">{{ t(lang, "empty_lost") }}</td>
+                <td colspan="8">{{ t(lang, "empty_lost") }}</td>
               </tr>
               <tr v-for="partition in scanResult?.lost_partitions" :key="partition.index">
                 <td>{{ partition.index }}</td>
@@ -105,7 +116,9 @@ const emit = defineEmits(["scan"]);
                 <td>{{ partition.start_lba }}</td>
                 <td>{{ formatSize(partition.size_bytes) }}</td>
                 <td><span class="fs-tag">{{ fsLabel(partition) }}</span></td>
-                <td>{{ partition.source }}</td>
+                <td>{{ partitionSourceLabel(partition.source) }}</td>
+                <td>{{ formatConfidence(partition.confidence) }}</td>
+                <td>{{ conflictStatusLabel(partition.conflict_status) }}</td>
               </tr>
             </tbody>
           </table>

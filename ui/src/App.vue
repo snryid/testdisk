@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { filesystemLabel, partitionTableTypeLabel, t } from "./i18n";
+import { conflictStatusLabel, filesystemLabel, partitionSourceLabel, partitionTableTypeLabel, t } from "./i18n";
 import DiskSidebar from "./components/DiskSidebar.vue";
 import AnalyzePanel from "./components/AnalyzePanel.vue";
 import FormatPanel from "./components/FormatPanel.vue";
@@ -201,6 +201,11 @@ function formatSize(bytes) {
   return `${size.toFixed(index > 0 ? 1 : 0)} ${units[index]}`;
 }
 
+function formatConfidence(value) {
+  if (typeof value !== "number") return "-";
+  return `${Math.round(value * 100)}%`;
+}
+
 function fsLabel(partition) {
   return partition.filesystem?.fs_type || "-";
 }
@@ -231,6 +236,14 @@ function statusClass(status) {
   if (status === "deleted") return "status-deleted";
   if (status === "bootable") return "status-bootable";
   return "";
+}
+
+function partitionSourceLabelFor(source) {
+  return partitionSourceLabel(lang.value, source || "unknown");
+}
+
+function conflictStatusLabelFor(status) {
+  return conflictStatusLabel(lang.value, status || "unknown");
 }
 
 async function loadDisks() {
@@ -443,7 +456,10 @@ onMounted(() => {
             :table-type-label="tableTypeLabel"
             :is-scanning="isScanning"
             :format-size="formatSize"
+            :format-confidence="formatConfidence"
             :fs-label="fsLabel"
+            :partition-source-label="partitionSourceLabelFor"
+            :conflict-status-label="conflictStatusLabelFor"
             :status-class="statusClass"
             @scan="scanSelected"
           />

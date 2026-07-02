@@ -196,3 +196,67 @@ pub fn detect_gpt(disk: &mut DiskReader) -> Result<Option<GptTable>, crate::disk
 
     Ok(None)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::disk::DiskReader;
+    use std::path::PathBuf;
+
+    fn write_u32_le(img: &mut [u8], offset: usize, value: u32) {
+        img[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+    }
+
+    fn write_u64_le(img: &mut [u8], offset: usize, value: u64) {
+        img[offset..offset + 8].copy_from_slice(&value.to_le_bytes());
+    }
+
+    fn create_backup_gpt_image(path: &PathBuf) {
+        let sectors = 8192usize;
+        let mut img = vec![0u8; sectors * 512];
+        let last_lba = (sectors as u64) - 1;
+        let entries_lba = last_lba - 1;
+
+        let header_offset = (last_lba as usize) * 512;
+        img[header_offset..header_offset + 8].copy_from_slice(GPT_SIGNATURE);
+        write_u32_le(&mut img, header_offset + 8, 0x0001_0000);
+        write_u32_le(&mut img, header_offset + 12, 92);
+        write_u32_le(&mut img, header_offset + 16, 0);
+        write_u64_le(&mut img, header_offset + 24, last_lba);
+        write_u64_le(&mut img, header_offset + 32, 1);
+        write_u64_le(&mut img, header_offset + 40, 34);
+        write_u64_le(&mut img, header_offset + 48, last_lba - 34);
+        write_u64_le(&mut img, header_offset + 56, entries_lba);
+        write_u32_le(&mut img, header_offset + 64, 1);
+        write_u32_le(&mut img, header_offset + 68, 128);
+        img[header_offset + 72..header_offset + 88].fill(0x11);
+
+        let entry_offset = (entries_lba as usize) * 512;
+        img[entry_offset..entry_offset + 16].fill(0x22);
+        img[entry_offset + 16..entry_offset + 32].fill(0x33);
+        write_u64_le(&mut img, entry_offset + 32, 2048);
+        write_u64_le(&mut img, entry_offset + 40, 4095);
+        let name = "Backup GPT".encode_utf16().collect::<Vec<u16>>();
+        for (i, unit) in name.iter().enumerate() {
+            let offset = entry_offset + 56 + i * 2;
+            img[offset..offset + 2].copy_from_slice(&unit.to_le_bytes());
+        }
+
+        std::fs::write(path, img).unwrap();
+    }
+
+    #[test]
+    fn detects_backup_gpt_header() {
+        let temp_path: PathBuf = std::env::temp_dir().join("testdisk-gpt-backup.img");
+        create_backup_gpt_image(&temp_path);
+
+        let mut disk = DiskReader::open(&temp_path).unwrap();
+        let table = detect_gpt(&mut disk).unwrap().unwrap();
+
+        assert_eq!(table.header_lba, 8191);
+        assert!(table.signature_valid);
+        assert_eq!(table.partitions.len(), 1);
+
+        let _ = std::fs::remove_file(temp_path);
+    }
+}

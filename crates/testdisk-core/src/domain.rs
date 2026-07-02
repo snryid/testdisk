@@ -71,6 +71,10 @@ pub struct PartitionResult {
     pub filesystem: Option<crate::fs_detect::FilesystemInfo>,
     pub status: String,
     pub source: String,
+    #[serde(default = "default_partition_confidence")]
+    pub confidence: f32,
+    #[serde(default = "default_conflict_status")]
+    pub conflict_status: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,4 +87,12 @@ pub struct ScanResult {
     pub partitions: Vec<PartitionResult>,
     pub lost_partitions: Vec<PartitionResult>,
     pub warnings: Vec<String>,
+}
+
+fn default_partition_confidence() -> f32 {
+    1.0
+}
+
+fn default_conflict_status() -> String {
+    "clear".to_string()
 }

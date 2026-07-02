@@ -89,7 +89,7 @@ export const messages = {
     warnings: "警告",
     partition_table: "分区表",
     lost_partitions: "丢失/删除分区 (深度扫描)",
-    lost_hint: "在 1MB 边界搜索文件系统签名，类似 TestDisk Deeper Search",
+    lost_hint: "结合 64KB/1MB 对齐启发式搜索文件系统签名，并标记置信度与冲突",
     fs_table: "文件系统",
     status: "状态",
     name: "名称",
@@ -97,6 +97,8 @@ export const messages = {
     partition_size: "大小",
     partition_type: "类型",
     source_column: "来源",
+    confidence: "置信度",
+    conflict: "冲突",
     empty: "无数据",
     empty_lost: "未发现丢失分区",
     footer:
@@ -118,6 +120,18 @@ export const messages = {
       gpt: "EFI GPT",
       mbr: "Legacy MBR",
       unknown: "未知",
+    },
+    conflict_status: {
+      clear: "正常",
+      overlap: "重叠",
+      out_of_bounds: "越界",
+      unknown: "未知",
+    },
+    partition_source: {
+      gpt: "GPT",
+      mbr: "MBR",
+      "mbr-logical": "MBR 逻辑分区",
+      deep_scan: "深度扫描",
     },
     filesystem_labels: {
       apfs: "APFS",
@@ -219,7 +233,7 @@ export const messages = {
     warnings: "Warnings",
     partition_table: "Partition table",
     lost_partitions: "Lost/deleted partitions (deep scan)",
-    lost_hint: "Search filesystem signatures at 1 MB boundaries, similar to TestDisk Deeper Search",
+    lost_hint: "Search filesystem signatures with 64KB/1MB alignment heuristics and surface confidence/conflict state",
     fs_table: "Filesystem",
     status: "Status",
     name: "Name",
@@ -227,6 +241,8 @@ export const messages = {
     partition_size: "Size",
     partition_type: "Type",
     source_column: "Source",
+    confidence: "Confidence",
+    conflict: "Conflict",
     empty: "No data",
     empty_lost: "No lost partitions found",
     footer: "Simplified implementation based on cgsecurity/testdisk",
@@ -247,6 +263,18 @@ export const messages = {
       gpt: "EFI GPT",
       mbr: "Legacy MBR",
       unknown: "Unknown",
+    },
+    conflict_status: {
+      clear: "Clear",
+      overlap: "Overlap",
+      out_of_bounds: "Out of bounds",
+      unknown: "Unknown",
+    },
+    partition_source: {
+      gpt: "GPT",
+      mbr: "MBR",
+      "mbr-logical": "MBR logical",
+      deep_scan: "Deep scan",
     },
     filesystem_labels: {
       apfs: "APFS",
@@ -275,4 +303,12 @@ export function filesystemLabel(lang, value) {
 
 export function partitionTableTypeLabel(lang, value) {
   return messages[lang]?.partition_table_type?.[value] ?? messages.en.partition_table_type[value] ?? value;
+}
+
+export function conflictStatusLabel(lang, value) {
+  return messages[lang]?.conflict_status?.[value] ?? messages.en.conflict_status[value] ?? value;
+}
+
+export function partitionSourceLabel(lang, value) {
+  return messages[lang]?.partition_source?.[value] ?? messages.en.partition_source[value] ?? value;
 }
