@@ -8,7 +8,7 @@ use testdisk_core::{DiskError, DiskInfo};
 pub trait PlatformAdapter {
     fn list_disks(&self) -> Vec<DiskInfo>;
     fn open_image(&self, path: &str) -> Result<DiskInfo, DiskError>;
-    fn format_filesystems(&self) -> Vec<FormatFilesystemOption>;
+    fn format_filesystems(&self, target: Option<&DiskInfo>) -> Vec<FormatFilesystemOption>;
     fn format_disk(&self, request: FormatDiskRequest) -> Result<FormatDiskResult, FormatError>;
 }
 
@@ -24,8 +24,8 @@ impl PlatformAdapter for HostPlatformAdapter {
         disk_info_from_image(path)
     }
 
-    fn format_filesystems(&self) -> Vec<FormatFilesystemOption> {
-        format_filesystem_options()
+    fn format_filesystems(&self, target: Option<&DiskInfo>) -> Vec<FormatFilesystemOption> {
+        format_filesystem_options(target)
     }
 
     fn format_disk(&self, request: FormatDiskRequest) -> Result<FormatDiskResult, FormatError> {

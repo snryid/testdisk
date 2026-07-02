@@ -3565,6 +3565,7 @@ version = "0.1.0"
 dependencies = [
  "byteorder",
  "crc32fast",
+ "log",
  "plist",
  "serde",
  "serde_json",

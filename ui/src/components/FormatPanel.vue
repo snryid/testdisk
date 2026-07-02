@@ -26,18 +26,18 @@ const emit = defineEmits([
 <template>
   <section class="tab-panel">
     <div class="panel-toolbar">
-      <div>
-        <h2>{{ t(lang, "format_panel_title") }}</h2>
-        <p class="panel-subtitle">{{ t(lang, "format_hint") }}</p>
-      </div>
-      <span class="danger-chip">{{ t(lang, "format_title") }}</span>
+        <div>
+          <h2>{{ t(lang, "format_panel_title") }}</h2>
+          <p class="panel-subtitle">{{ t(lang, "format_hint") }}</p>
+        </div>
+        <span class="danger-chip">{{ t(lang, "format_title") }}</span>
     </div>
 
     <div class="format-workflow">
       <div class="data-card">
         <div class="section-head">
           <h3>{{ t(lang, "format_title") }}</h3>
-          <span class="section-subtitle">{{ formatBlockReason }}</span>
+          <span class="section-subtitle">{{ formatBlockReason || t(lang, "format_ready") }}</span>
         </div>
         <div class="format-grid">
           <label class="field">

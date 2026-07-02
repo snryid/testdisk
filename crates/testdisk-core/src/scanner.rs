@@ -23,7 +23,10 @@ pub fn scan_disk(path: &str) -> Result<ScanResult, DiskError> {
         if gpt_table.header_lba != 1 {
             warnings.push("检测到 GPT 备份头，主头不可用".to_string());
         }
-        (PartitionTableType::Gpt, analyze_gpt_partitions(&mut disk, gpt_table))
+        (
+            PartitionTableType::Gpt,
+            analyze_gpt_partitions(&mut disk, gpt_table),
+        )
     } else if let Some(ref mbr_table) = mbr {
         if !mbr_table.signature_valid {
             warnings.push("MBR 签名无效 (0x55AA)".to_string());
@@ -31,7 +34,10 @@ pub fn scan_disk(path: &str) -> Result<ScanResult, DiskError> {
         if is_gpt_protective_mbr(mbr_table) {
             warnings.push("检测到 GPT 保护性 MBR，但 GPT 头未找到".to_string());
         }
-        (PartitionTableType::Mbr, analyze_mbr_partitions(&mut disk, mbr_table))
+        (
+            PartitionTableType::Mbr,
+            analyze_mbr_partitions(&mut disk, mbr_table),
+        )
     } else {
         warnings.push("未检测到有效的分区表".to_string());
         (PartitionTableType::Unknown, vec![])
@@ -153,7 +159,8 @@ fn search_lost_partitions(
                     let size_estimate = estimate_fs_size(&data, fs.fs_type.as_str());
                     let size_bytes = size_estimate.min(disk_size.saturating_sub(offset));
                     let start_lba = offset / SECTOR_SIZE;
-                    let end_lba = start_lba + size_bytes.saturating_div(SECTOR_SIZE).saturating_sub(1);
+                    let end_lba =
+                        start_lba + size_bytes.saturating_div(SECTOR_SIZE).saturating_sub(1);
                     let fs_confidence = fs.confidence.clone();
                     found.push(build_partition_result(
                         (found.len() + 1) as u32,
@@ -339,7 +346,10 @@ mod tests {
         write_file(path, img);
 
         let result = scan_disk(path).unwrap();
-        assert!(matches!(result.partition_table_type, PartitionTableType::Mbr));
+        assert!(matches!(
+            result.partition_table_type,
+            PartitionTableType::Mbr
+        ));
         assert!(!result.partitions.is_empty());
         assert!(result.partitions[0].filesystem.is_some());
         assert!((result.partitions[0].confidence - 0.96).abs() < f32::EPSILON);

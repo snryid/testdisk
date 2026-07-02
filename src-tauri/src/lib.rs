@@ -22,12 +22,14 @@ fn open_image(path: String) -> Result<DiskInfo, String> {
 }
 
 #[tauri::command]
-fn get_format_filesystems() -> Vec<FormatFilesystemOption> {
-    format_filesystem_options()
+fn get_format_filesystems(target: Option<DiskInfo>) -> Vec<FormatFilesystemOption> {
+    format_filesystem_options(target.as_ref())
 }
 
 #[tauri::command]
 fn format_disk_path(request: FormatDiskRequest) -> Result<FormatDiskResult, String> {
+    let target = trusted_format_target(&request.path, &request.target)?;
+    let request = FormatDiskRequest { target, ..request };
     format_disk(request).map_err(|e| e.to_string())
 }
 
@@ -35,6 +37,20 @@ fn format_disk_path(request: FormatDiskRequest) -> Result<FormatDiskResult, Stri
 fn export_scan_report_json(path: String, result: ScanResult) -> Result<(), String> {
     let json = scan_report_json(result).map_err(|e| e.to_string())?;
     std::fs::write(path, json).map_err(|e| e.to_string())
+}
+
+fn trusted_format_target(path: &str, target: &DiskInfo) -> Result<DiskInfo, String> {
+    let current = host_platform_adapter()
+        .list_disks()
+        .into_iter()
+        .find(|disk| disk.path == path || disk.platform_id == target.platform_id)
+        .ok_or_else(|| format!("format target not found: {path}"))?;
+
+    if current.path != target.path || current.platform_id != target.platform_id {
+        return Err("format target no longer matches current disk metadata".to_string());
+    }
+
+    Ok(current)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

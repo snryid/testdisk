@@ -193,7 +193,10 @@ mod tests {
         let mut disk = DiskReader::open(&temp_path).unwrap();
         let table = read_mbr(&mut disk).unwrap();
 
-        assert!(table.partitions.iter().any(|partition| partition.partition_type == 0x05));
+        assert!(table
+            .partitions
+            .iter()
+            .any(|partition| partition.partition_type == 0x05));
         assert!(table.partitions.iter().any(|partition| partition.logical));
 
         let _ = std::fs::remove_file(temp_path);

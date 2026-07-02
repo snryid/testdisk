@@ -72,6 +72,7 @@ const selectedDiskSourceLabel = computed(() =>
       ? t(lang.value, "source_system")
       : "-"
 );
+const selectedDiskFormatTarget = computed(() => selectedDisk.value?.platform_id || "");
 const selectedDiskStateNotice = computed(() => {
   const disk = selectedDisk.value;
   if (!disk) return null;
@@ -102,7 +103,7 @@ const selectedDiskStateNotice = computed(() => {
 
   return null;
 });
-const formatConfirmationTarget = computed(() => selectedDisk.value?.path || "");
+const formatConfirmationTarget = computed(() => selectedDiskFormatTarget.value);
 const tableTypeLabel = computed(() => {
   const type = scanResult.value?.partition_table_type;
   return type ? partitionTableTypeLabel(lang.value, type) : "-";
@@ -150,6 +151,9 @@ const tabs = computed(() => [
 
 watch(theme, applyTheme, { immediate: true });
 watch(lang, applyLanguage, { immediate: true });
+watch(selectedPath, () => {
+  loadFormatFilesystems();
+});
 
 function loadPreference(key, fallback) {
   try {
@@ -261,7 +265,19 @@ async function loadDisks() {
 
 async function loadFormatFilesystems() {
   try {
-    formatFilesystems.value = await invoke("get_format_filesystems");
+    const available = await invoke("get_format_filesystems", {
+      target: selectedDisk.value || null,
+    });
+    if (available.length > 0) {
+      formatFilesystems.value = available;
+    } else {
+      formatFilesystems.value = await invoke("get_format_filesystems", {
+        target: null,
+      });
+    }
+    if (!available.some((filesystem) => filesystem.value === selectedFormatFilesystem.value)) {
+      selectedFormatFilesystem.value = formatFilesystems.value[0]?.value || "";
+    }
   } catch (error) {
     formatStatus.value = t(lang.value, "loading_format_options", { error });
   }
@@ -334,6 +350,7 @@ async function formatSelectedDisk() {
     const result = await invoke("format_disk_path", {
       request: {
         path: selectedPath.value,
+        target: selectedDisk.value,
         filesystem,
         volume_name: volumeName,
         confirmation: formatConfirmation.value,

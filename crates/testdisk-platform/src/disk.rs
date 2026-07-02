@@ -141,7 +141,10 @@ pub fn enumerate_targets() -> Vec<NormalizedTarget> {
 }
 
 pub fn list_disks() -> Vec<DiskInfo> {
-    enumerate_targets().into_iter().map(DiskInfo::from).collect()
+    enumerate_targets()
+        .into_iter()
+        .map(DiskInfo::from)
+        .collect()
 }
 
 pub fn disk_info_from_image(path: &str) -> Result<DiskInfo, DiskError> {
@@ -207,8 +210,8 @@ fn enumerate_targets_macos() -> Vec<NormalizedTarget> {
         let Some(device_id) = plist_string(dict, "DeviceIdentifier") else {
             continue;
         };
-        let device_node = plist_string(dict, "DeviceNode")
-            .unwrap_or_else(|| format!("/dev/{device_id}"));
+        let device_node =
+            plist_string(dict, "DeviceNode").unwrap_or_else(|| format!("/dev/{device_id}"));
         let raw_path = platform_device_path(&device_node);
         let size_bytes = plist_u64(dict, "Size").unwrap_or(0);
         let protocol = plist_string(dict, "BusProtocol");
@@ -348,12 +351,12 @@ fn lsblk_device_to_target(device: LsblkDevice) -> Option<NormalizedTarget> {
         .as_deref()
         .and_then(|value| value.parse::<u64>().ok())
         .unwrap_or(0);
-    let mount_state = if mountpoints_present(device.mountpoint.as_ref(), device.mountpoints.as_ref())
-    {
-        TargetMountState::Mounted
-    } else {
-        TargetMountState::Unmounted
-    };
+    let mount_state =
+        if mountpoints_present(device.mountpoint.as_ref(), device.mountpoints.as_ref()) {
+            TargetMountState::Mounted
+        } else {
+            TargetMountState::Unmounted
+        };
     let protocol = device.tran.clone().or_else(|| {
         if device.name.starts_with("nvme") {
             Some("nvme".to_string())
@@ -434,7 +437,9 @@ fn fallback_linux_targets() -> Vec<NormalizedTarget> {
                 is_external: removable,
                 mount_state: TargetMountState::Unknown,
                 readable,
-                writable: read_bool(sys_path.join("ro")).map(|value| !value).unwrap_or(false),
+                writable: read_bool(sys_path.join("ro"))
+                    .map(|value| !value)
+                    .unwrap_or(false),
                 permission_message,
                 source: TargetSource::System,
             });
@@ -634,9 +639,15 @@ mod tests {
     fn normalizes_system_paths_stably() {
         assert_eq!(normalized_id_from_path("/dev/disk4"), "disk4");
         #[cfg(target_os = "windows")]
-        assert_eq!(normalized_id_from_path(r"\\.\PhysicalDrive12"), "physicaldrive12");
+        assert_eq!(
+            normalized_id_from_path(r"\\.\PhysicalDrive12"),
+            "physicaldrive12"
+        );
         #[cfg(not(target_os = "windows"))]
-        assert_eq!(normalized_id_from_path(r"\\.\PhysicalDrive12"), r"\\.\physicaldrive12");
+        assert_eq!(
+            normalized_id_from_path(r"\\.\PhysicalDrive12"),
+            r"\\.\physicaldrive12"
+        );
     }
 
     #[test]
