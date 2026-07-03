@@ -1,5 +1,7 @@
 [workspace]
-members = ["crates/testdisk-core", "crates/testdisk-platform", "src-tauri"]
+members = ["crates/testdisk-core", "crates/testdisk-platform"]
+exclude = ["src-tauri", "src-tauri-v1"]
+default-members = ["crates/testdisk-core", "crates/testdisk-platform"]
 resolver = "2"
 
 [workspace.package]

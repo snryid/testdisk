@@ -1,8 +1,8 @@
-# Mini TestDisk — cross-platform GUI build (Rust + Tauri 2)
+# Mini TestDisk — cross-platform GUI build (Rust + Tauri 1/2)
 #
 # Usage:
 #   make help          Show all targets
-#   make dev           Run development GUI
+#   make dev           Run development GUI (auto-detects Tauri 1 on Ubuntu 20.04)
 #   make build         Build release bundle for current OS
 #   make build-macos   Build on macOS (.app / .dmg)
 #   make build-linux   Build on Linux (.deb / .AppImage)
@@ -13,8 +13,9 @@ SHELL := /usr/bin/env bash
 
 PROJECT_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 CARGO        ?= cargo
-TAURI        ?= $(CARGO) tauri
 NPM          ?= npm
+RUN_TAURI    := $(PROJECT_ROOT)/scripts/run-tauri.sh
+TAURI_MAJOR  := $(shell "$(PROJECT_ROOT)/scripts/detect-tauri-version.sh" 2>/dev/null || echo 2)
 
 # Detect host OS (Darwin / Linux / MINGW* / MSYS* / CYGWIN*)
 UNAME_S := $(shell uname -s 2>/dev/null || echo Unknown)
@@ -42,58 +43,80 @@ TAURI_VERSION := $(shell $(CARGO) tauri --version 2>/dev/null || echo "not insta
 NODE_VERSION := $(shell node --version 2>/dev/null || echo "not installed")
 NPM_VERSION := $(shell $(NPM) --version 2>/dev/null || echo "not installed")
 
-.PHONY: help check install-tauri-cli dev build build-debug build-macos build-linux build-windows \
-        test test-core sample-image clean info
+.PHONY: help check check-tauri install-tauri-cli install-tauri-cli-v2 dev dev-v1 dev-v2 dev-xvfb build build-debug \
+        build-macos build-linux build-windows test test-core sample-image clean info tauri-version
 
 help: ## Show available targets
 	@echo "Mini TestDisk — Makefile targets"
 	@echo ""
 	@echo "Host OS detected: $(HOST_OS) ($(UNAME_S))"
+	@echo "Tauri major (auto): $(TAURI_MAJOR)"
 	@echo ""
 	@grep -E '^[a-zA-Z0-9_.-]+:.*##' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
-check: ## Verify Rust and Tauri CLI are installed
-	@echo "Rust:  $(RUST_VERSION)"
-	@echo "Tauri: $(TAURI_VERSION)"
-	@echo "Node:  $(NODE_VERSION)"
-	@echo "npm:   $(NPM_VERSION)"
+tauri-version: ## Print auto-detected Tauri major version (1 or 2)
+	@"$(PROJECT_ROOT)/scripts/detect-tauri-version.sh"
+
+check: check-tauri ## Verify Rust, Node, and Tauri CLI for detected major version
+	@echo "Rust:        $(RUST_VERSION)"
+	@echo "Tauri CLI:   $(TAURI_VERSION)"
+	@echo "Tauri major: $(TAURI_MAJOR)"
+	@echo "Node:        $(NODE_VERSION)"
+	@echo "npm:         $(NPM_VERSION)"
 	@command -v $(CARGO) >/dev/null 2>&1 || { echo "Error: cargo not found. Install Rust: https://rustup.rs"; exit 1; }
 	@command -v node >/dev/null 2>&1 || { echo "Error: node not found. Install Node.js: https://nodejs.org"; exit 1; }
 	@command -v $(NPM) >/dev/null 2>&1 || { echo "Error: npm not found. Install Node.js: https://nodejs.org"; exit 1; }
+	@echo "OK — toolchain ready"
+
+check-tauri: ## Verify Tauri CLI for auto-detected major version
+ifeq ($(TAURI_MAJOR),1)
+	@command -v node >/dev/null 2>&1 || { echo "Error: node required for Tauri 1 CLI (npx @tauri-apps/cli@1)"; exit 1; }
+else
 	@$(CARGO) tauri --version >/dev/null 2>&1 || { \
 		echo "Error: cargo tauri not found. Run: make install-tauri-cli"; \
 		exit 1; \
 	}
-	@echo "OK — toolchain ready"
+endif
 
-install-tauri-cli: ## Install Tauri CLI (cargo install tauri-cli)
+install-tauri-cli: install-tauri-cli-v2 ## Install Tauri 2 CLI (cargo install tauri-cli)
+
+install-tauri-cli-v2: ## Install Tauri 2 CLI only
 	$(CARGO) install tauri-cli --locked
 
-dev: check ## Start GUI in development mode (hot reload backend)
-	cd "$(PROJECT_ROOT)" && $(TAURI) dev
+dev: check ## Start GUI (auto-detect Tauri 1 on Ubuntu 20.04, else Tauri 2)
+	"$(RUN_TAURI)" dev
 
-build: check ## Build release GUI bundle for current platform
-	cd "$(PROJECT_ROOT)" && $(TAURI) build
+dev-xvfb: check ## Start GUI on virtual display (SSH/headless smoke test; needs xvfb)
+	USE_XVFB=1 "$(RUN_TAURI)" dev
+
+dev-v1: ## Force Tauri 1.x development mode
+	TAURI_MAJOR=1 "$(RUN_TAURI)" dev
+
+dev-v2: check-tauri ## Force Tauri 2.x development mode
+	TAURI_MAJOR=2 "$(RUN_TAURI)" dev
+
+build: check ## Build release GUI bundle (auto-detect Tauri major)
+	"$(RUN_TAURI)" build
 	@$(MAKE) --no-print-directory info
 
 build-debug: check ## Build debug GUI bundle for current platform
-	cd "$(PROJECT_ROOT)" && $(TAURI) build --debug
+	"$(RUN_TAURI)" build --debug
 
 build-macos: ## Build macOS .app and .dmg (must run on macOS)
 ifneq ($(HOST_OS),macos)
 	@echo "Error: build-macos requires macOS (current: $(UNAME_S))"
 	@exit 1
 endif
-	cd "$(PROJECT_ROOT)" && $(TAURI) build --bundles app,dmg
+	TAURI_MAJOR=2 "$(RUN_TAURI)" build --bundles app,dmg
 	@$(MAKE) --no-print-directory info
 
-build-linux: ## Build Linux .deb and AppImage (must run on Linux)
+build-linux: ## Build Linux .deb and AppImage (auto-detect Tauri major)
 ifneq ($(HOST_OS),linux)
 	@echo "Error: build-linux requires Linux (current: $(UNAME_S))"
 	@exit 1
 endif
-	cd "$(PROJECT_ROOT)" && $(TAURI) build --bundles deb,appimage
+	"$(RUN_TAURI)" build --bundles deb,appimage
 	@$(MAKE) --no-print-directory info
 
 build-windows: ## Build Windows .exe and .msi (must run on Windows)
@@ -101,11 +124,16 @@ ifneq ($(HOST_OS),windows)
 	@echo "Error: build-windows requires Windows (current: $(UNAME_S))"
 	@exit 1
 endif
-	cd "$(PROJECT_ROOT)" && $(TAURI) build --bundles msi,nsis
+	TAURI_MAJOR=2 "$(RUN_TAURI)" build --bundles msi,nsis
 	@$(MAKE) --no-print-directory info
 
-test: ## Run all Rust unit tests
-	cd "$(PROJECT_ROOT)" && $(CARGO) test --workspace
+test: ## Run Rust unit tests (core crates; Tauri shell if buildable)
+	cd "$(PROJECT_ROOT)" && $(CARGO) test -p testdisk-core -p testdisk-platform
+ifeq ($(TAURI_MAJOR),1)
+	-cd "$(PROJECT_ROOT)/src-tauri-v1" && $(CARGO) test
+else
+	-cd "$(PROJECT_ROOT)/src-tauri" && $(CARGO) test
+endif
 
 test-core: ## Run testdisk-core library tests only
 	cd "$(PROJECT_ROOT)" && $(CARGO) test -p testdisk-core
@@ -136,7 +164,7 @@ clean: ## Remove build artifacts
 
 info: ## Print bundle output locations
 	@echo ""
-	@echo "Build artifacts (platform: $(HOST_OS)):"
+	@echo "Build artifacts (platform: $(HOST_OS), Tauri: $(TAURI_MAJOR).x):"
 	@if [ -d "$(BUNDLE_DIR)" ]; then \
 		find "$(PROJECT_ROOT)/target/release/bundle" -maxdepth 3 -type f 2>/dev/null | head -20 || true; \
 		find "$(PROJECT_ROOT)/target/release/bundle" -maxdepth 2 -type d -name "*.app" 2>/dev/null || true; \

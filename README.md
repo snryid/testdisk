@@ -31,13 +31,38 @@
 
 - Xcode Command Line Tools：`xcode-select --install`
 
-**Linux**（Debian/Ubuntu 示例）
+**Linux — Tauri 2**（Ubuntu 22.04+ / Debian 12+）
 
 ```bash
 sudo apt update
 sudo apt install -y \
   libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
-  librsvg2-dev patchelf build-essential curl wget file libssl-dev
+  librsvg2-dev patchelf build-essential curl wget file libssl-dev pkg-config
+```
+
+**Linux — Tauri 1**（Ubuntu 20.04 等仅含 WebKitGTK 4.0 的系统）
+
+项目会在 `make dev` / `make build` 时**自动检测**系统 WebKit 版本并选择 Tauri 1.x 或 2.x：
+
+```bash
+make tauri-version   # 查看检测结果（20.04 输出 1，22.04+ 输出 2）
+```
+
+Ubuntu 20.04 需安装：
+
+```bash
+sudo apt update
+sudo apt install -y \
+  pkg-config build-essential \
+  libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.0-dev \
+  libappindicator3-dev librsvg2-dev patchelf curl wget file libssl-dev
+```
+
+也可手动指定版本：
+
+```bash
+make dev-v1   # 强制 Tauri 1.x
+make dev-v2   # 强制 Tauri 2.x（需 WebKitGTK 4.1）
 ```
 
 **Windows**
@@ -64,6 +89,8 @@ make sample-image
 # 4. 启动开发版 GUI
 make dev
 ```
+
+> **SSH 远程开发：** 若 `make dev` 报 `cannot open display`，说明当前 SSH 会话没有图形环境。请用 `ssh -X user@host` 重新登录（客户端需 X 服务器），或在本地桌面终端运行。无界面冒烟测试：`sudo apt install xvfb && make dev-xvfb`。
 
 在 GUI 中：**打开磁盘镜像...** → 选择 `testdata/sample-mbr.img` → **分析分区**。
 
@@ -170,9 +197,15 @@ testdisk/
 │       ├── adapter.rs
 │       ├── disk.rs
 │       └── formatter.rs
-├── src-tauri/               # Tauri 后端（IPC 命令）
+├── src-tauri/               # Tauri 2 后端（Ubuntu 22.04+ / WebKitGTK 4.1）
 │   ├── src/lib.rs
 │   └── tauri.conf.json
+├── src-tauri-v1/            # Tauri 1 后端（Ubuntu 20.04 / WebKitGTK 4.0）
+│   ├── src/lib.rs
+│   └── tauri.conf.json
+├── scripts/
+│   ├── detect-tauri-version.sh
+│   └── run-tauri.sh
 ├── package.json             # Vue / Vite 前端依赖与脚本
 ├── vite.config.js           # Vite 构建配置
 ├── ui/                      # Vue 前端

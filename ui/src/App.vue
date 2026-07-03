@@ -1,7 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
-import { invoke } from "@tauri-apps/api/core";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { invoke, openDialog, saveDialog } from "./tauri-api";
 import { conflictStatusLabel, filesystemLabel, partitionSourceLabel, partitionTableTypeLabel, t } from "./i18n";
 import DiskSidebar from "./components/DiskSidebar.vue";
 import AnalyzePanel from "./components/AnalyzePanel.vue";
@@ -284,7 +283,7 @@ async function loadFormatFilesystems() {
 }
 
 async function openImage() {
-  const selected = await open({
+  const selected = await openDialog({
     multiple: false,
     filters: [{ name: "Disk Image", extensions: ["img", "dmg", "iso", "raw", "bin"] }],
   });
@@ -377,7 +376,7 @@ async function exportScanReport() {
     return;
   }
 
-  const path = await save({
+  const path = await saveDialog({
     defaultPath: "mini-testdisk-scan-report.json",
     filters: [{ name: "JSON", extensions: ["json"] }],
   });
