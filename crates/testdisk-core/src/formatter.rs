@@ -103,6 +103,12 @@ pub fn format_disk(request: FormatDiskRequest) -> Result<FormatDiskResult, Forma
     execute_format_plan(plan)
 }
 
+pub fn preview_format_plan(
+    request: &FormatDiskRequest,
+) -> Result<FormatOperationPlan, FormatError> {
+    build_format_plan(request)
+}
+
 fn build_format_plan(request: &FormatDiskRequest) -> Result<FormatOperationPlan, FormatError> {
     validate_target(&request.target)?;
     validate_confirmation(&request.confirmation, &request.target)?;
@@ -737,5 +743,20 @@ mod tests {
         request.confirmation = "disk4".to_string();
         let plan = build_format_plan(&request);
         assert!(plan.is_ok());
+    }
+
+    #[test]
+    fn previews_format_plan_without_execution() {
+        let request = FormatDiskRequest {
+            path: "/dev/disk4".to_string(),
+            target: sample_target(),
+            filesystem: FormatFilesystem::Exfat,
+            volume_name: "USB".to_string(),
+            confirmation: "disk4".to_string(),
+        };
+
+        let plan = preview_format_plan(&request).unwrap();
+        assert_eq!(plan.target_id, "disk4");
+        assert!(!plan.steps.is_empty());
     }
 }

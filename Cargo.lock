@@ -182,6 +182,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "testdisk-cli"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "testdisk-core",
+ "testdisk-platform",
+]
+
+[[package]]
 name = "testdisk-core"
 version = "0.1.0"
 dependencies = [

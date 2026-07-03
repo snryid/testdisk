@@ -15,8 +15,7 @@ export async function invoke(cmd, args) {
     const { invoke: invokeV2 } = await import("@tauri-apps/api/core");
     return invokeV2(cmd, args);
   }
-  const { invoke: invokeV1 } = await import("@tauri-apps/api-v1/tauri");
-  return invokeV1(cmd, args);
+  return window.__TAURI__.tauri.invoke(cmd, args);
 }
 
 export async function openDialog(options) {
@@ -24,8 +23,7 @@ export async function openDialog(options) {
     const { open } = await import("@tauri-apps/plugin-dialog");
     return open(options);
   }
-  const { open } = await import("@tauri-apps/api-v1/dialog");
-  return open(options);
+  return window.__TAURI__.dialog.open(options);
 }
 
 export async function saveDialog(options) {
@@ -33,8 +31,7 @@ export async function saveDialog(options) {
     const { save } = await import("@tauri-apps/plugin-dialog");
     return save(options);
   }
-  const { save } = await import("@tauri-apps/api-v1/dialog");
-  return save(options);
+  return window.__TAURI__.dialog.save(options);
 }
 
 export function tauriMajorVersion() {

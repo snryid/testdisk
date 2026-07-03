@@ -4,6 +4,7 @@ import { t } from "../i18n";
 defineProps({
   lang: { type: String, required: true },
   theme: { type: String, required: true },
+  runtimeLabel: { type: String, required: true },
 });
 
 const emit = defineEmits(["set-theme", "set-language"]);
@@ -30,6 +31,16 @@ const emit = defineEmits(["set-theme", "set-language"]);
           <button type="button" :class="{ active: theme === 'dark' }" @click="emit('set-theme', 'dark')">
             {{ t(lang, "theme_dark") }}
           </button>
+        </div>
+      </div>
+
+      <div class="data-card">
+        <div class="section-head">
+          <h3>{{ t(lang, "runtime_title") }}</h3>
+        </div>
+        <div class="notice info">
+          <strong>{{ runtimeLabel }}</strong>
+          <p>{{ t(lang, "runtime_hint") }}</p>
         </div>
       </div>
 

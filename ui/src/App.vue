@@ -1,10 +1,22 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
-import { invoke, openDialog, saveDialog } from "./tauri-api";
-import { conflictStatusLabel, filesystemLabel, partitionSourceLabel, partitionTableTypeLabel, t } from "./i18n";
+import { invoke, openDialog, saveDialog, tauriMajorVersion } from "./tauri-api";
+import {
+  conflictStatusLabel,
+  filesystemLabel,
+  partitionSourceLabel,
+  partitionTableTypeLabel,
+  t,
+} from "./i18n";
 import DiskSidebar from "./components/DiskSidebar.vue";
+import OverviewPanel from "./components/OverviewPanel.vue";
 import AnalyzePanel from "./components/AnalyzePanel.vue";
 import FormatPanel from "./components/FormatPanel.vue";
+import RepairPanel from "./components/RepairPanel.vue";
+import RecoveryPanel from "./components/RecoveryPanel.vue";
+import CarvingPanel from "./components/CarvingPanel.vue";
+import ImagingPanel from "./components/ImagingPanel.vue";
+import AutomationPanel from "./components/AutomationPanel.vue";
 import ReportsPanel from "./components/ReportsPanel.vue";
 import SettingsPanel from "./components/SettingsPanel.vue";
 
@@ -18,43 +30,46 @@ const scanResult = ref(null);
 const isLoadingDisks = ref(false);
 const isScanning = ref(false);
 const isFormatting = ref(false);
+const isPreviewingFormat = ref(false);
+const isDiagnosing = ref(false);
+const isPreviewingRepair = ref(false);
+const isRecovering = ref(false);
+const isCarving = ref(false);
+const isImaging = ref(false);
 const loadError = ref("");
 const selectedFormatFilesystem = ref("exfat");
 const formatVolumeName = ref("UNTITLED");
 const formatConfirmation = ref("");
 const formatStatus = ref("");
+const formatPreview = ref(null);
+const repairTargetPath = ref("");
+const diagnosisStatus = ref("");
+const bootDiagnoses = ref([]);
+const bootRepairPlans = ref([]);
+const recoverySourcePath = ref("");
+const recoveryDestinationDir = ref("");
+const recoveryStatus = ref("");
+const recoveryTranscript = ref(null);
+const carvingSourcePath = ref("");
+const carvingOutputDir = ref("");
+const selectedCarvingFamilies = ref(["jpeg", "png", "pdf"]);
+const carvingStatus = ref("");
+const carvingTranscript = ref(null);
+const imagingSourcePath = ref("");
+const imagingOutputPath = ref("");
+const imagingStatus = ref("");
+const imagingTranscript = ref(null);
 const exportStatus = ref("");
-const activeTab = ref("analyze");
+const automationStatus = ref("");
+const activeTab = ref("overview");
 
 const theme = ref(loadPreference(THEME_STORAGE_KEY, prefersDarkTheme() ? "dark" : "light"));
 const lang = ref(loadPreference(LANG_STORAGE_KEY, "zh"));
 
+const runtimeLabel = computed(() => `Tauri v${tauriMajorVersion()}`);
 const readableDiskCount = computed(() => diskOptions.value.filter((disk) => disk.readable).length);
 const unreadableDiskCount = computed(() => diskOptions.value.filter((disk) => !disk.readable).length);
 const hasAnyDisks = computed(() => diskOptions.value.length > 0);
-const listStateNotice = computed(() => {
-  if (isLoadingDisks.value || loadError.value) {
-    return null;
-  }
-
-  if (!hasAnyDisks.value) {
-    return {
-      variant: "info",
-      title: t(lang.value, "empty_list_title"),
-      body: t(lang.value, "empty_list_body"),
-    };
-  }
-
-  if (readableDiskCount.value === 0 && unreadableDiskCount.value > 0) {
-    return {
-      variant: "warning",
-      title: t(lang.value, "no_readable_disk_title"),
-      body: t(lang.value, "no_readable_disk_body"),
-    };
-  }
-
-  return null;
-});
 const selectedDisk = computed(() => diskOptions.value.find((disk) => disk.path === selectedPath.value));
 const selectedDiskAccessLabel = computed(() => {
   const access = selectedDisk.value?.access;
@@ -102,7 +117,29 @@ const selectedDiskStateNotice = computed(() => {
 
   return null;
 });
-const formatConfirmationTarget = computed(() => selectedDiskFormatTarget.value);
+const listStateNotice = computed(() => {
+  if (isLoadingDisks.value || loadError.value) {
+    return null;
+  }
+
+  if (!hasAnyDisks.value) {
+    return {
+      variant: "info",
+      title: t(lang.value, "empty_list_title"),
+      body: t(lang.value, "empty_list_body"),
+    };
+  }
+
+  if (readableDiskCount.value === 0 && unreadableDiskCount.value > 0) {
+    return {
+      variant: "warning",
+      title: t(lang.value, "no_readable_disk_title"),
+      body: t(lang.value, "no_readable_disk_body"),
+    };
+  }
+
+  return null;
+});
 const tableTypeLabel = computed(() => {
   const type = scanResult.value?.partition_table_type;
   return type ? partitionTableTypeLabel(lang.value, type) : "-";
@@ -112,6 +149,10 @@ const localizedFormatFilesystems = computed(() =>
     ...filesystem,
     label: filesystemLabel(lang.value, filesystem.value),
   }))
+);
+const formatConfirmationTarget = computed(() => selectedDiskFormatTarget.value);
+const formatPreviewAllowed = computed(
+  () => Boolean(canFormat.value && selectedFormatFilesystem.value && formatVolumeName.value.trim())
 );
 const canFormat = computed(() =>
   Boolean(
@@ -141,17 +182,61 @@ const formatBlockReason = computed(() => {
   }
   return "";
 });
-const tabs = computed(() => [
+const workflowTabs = computed(() => [
+  { key: "overview", label: t(lang.value, "tab_overview") },
   { key: "analyze", label: t(lang.value, "tab_analyze") },
   { key: "format", label: t(lang.value, "tab_format") },
+  { key: "repair", label: t(lang.value, "tab_repair") },
+  { key: "recovery", label: t(lang.value, "tab_recovery") },
+  { key: "carving", label: t(lang.value, "tab_carving") },
+  { key: "imaging", label: t(lang.value, "tab_imaging") },
+  { key: "automation", label: t(lang.value, "tab_automation") },
   { key: "reports", label: t(lang.value, "tab_reports") },
   { key: "settings", label: t(lang.value, "tab_settings") },
 ]);
+const commandTemplates = computed(() => {
+  const input = selectedDisk.value?.path || "<disk-or-image>";
+  const target = selectedDisk.value?.platform_id || "<target-id>";
+  const filesystem = selectedFormatFilesystem.value || "<filesystem>";
+  const volumeName = formatVolumeName.value.trim() || "UNTITLED";
+  const quotedInput = quoteCommandArg(input);
+  const quotedTarget = quoteCommandArg(target);
+  const quotedFilesystem = quoteCommandArg(filesystem);
+  const quotedVolume = quoteCommandArg(volumeName);
+
+  return [
+    {
+      key: "scan",
+      title: t(lang.value, "automation_scan_title"),
+      description: t(lang.value, "automation_scan_desc"),
+      command: `mini-testdisk scan --input ${quotedInput} --output report.json`,
+    },
+    {
+      key: "validate-plan",
+      title: t(lang.value, "automation_validate_title"),
+      description: t(lang.value, "automation_validate_desc"),
+      command: "mini-testdisk validate-plan --plan plan.json",
+    },
+    {
+      key: "list-filesystems",
+      title: t(lang.value, "automation_filesystems_title"),
+      description: t(lang.value, "automation_filesystems_desc"),
+      command: "mini-testdisk list-filesystems",
+    },
+    {
+      key: "format",
+      title: t(lang.value, "automation_format_title"),
+      description: t(lang.value, "automation_format_desc"),
+      command: `mini-testdisk format --target ${quotedTarget} --filesystem ${quotedFilesystem} --name ${quotedVolume} --confirm ${quotedTarget} --unsafe`,
+    },
+  ];
+});
 
 watch(theme, applyTheme, { immediate: true });
 watch(lang, applyLanguage, { immediate: true });
-watch(selectedPath, () => {
-  loadFormatFilesystems();
+watch(selectedPath, async () => {
+  await loadFormatFilesystems();
+  ensureWorkflowDefaults();
 });
 
 function loadPreference(key, fallback) {
@@ -249,11 +334,40 @@ function conflictStatusLabelFor(status) {
   return conflictStatusLabel(lang.value, status || "unknown");
 }
 
+function quoteCommandArg(value) {
+  if (!value || value.includes("<")) return value;
+  return `"${value.replaceAll('"', '\\"')}"`;
+}
+
+function ensureWorkflowDefaults() {
+  const diskPath = selectedDisk.value?.path || "";
+  if (!diskPath) return;
+  if (!repairTargetPath.value) repairTargetPath.value = diskPath;
+  if (!recoverySourcePath.value) recoverySourcePath.value = diskPath;
+  if (!carvingSourcePath.value) carvingSourcePath.value = diskPath;
+  if (!imagingSourcePath.value) imagingSourcePath.value = diskPath;
+}
+
+function buildFormatRequest(confirmationOverride = null) {
+  return {
+    path: selectedPath.value,
+    target: selectedDisk.value,
+    filesystem: selectedFormatFilesystem.value,
+    volume_name: formatVolumeName.value.trim(),
+    confirmation: confirmationOverride ?? formatConfirmation.value,
+  };
+}
+
+function setWorkflowTab(tab) {
+  activeTab.value = tab;
+}
+
 async function loadDisks() {
   isLoadingDisks.value = true;
   loadError.value = "";
   try {
     diskOptions.value = await invoke("get_disks");
+    ensureWorkflowDefaults();
   } catch (error) {
     loadError.value = t(lang.value, "loading_disks", { error });
     diskOptions.value = [];
@@ -291,11 +405,9 @@ async function openImage() {
 
   try {
     const info = await invoke("open_image", { path: selected });
-    diskOptions.value = [
-      ...diskOptions.value.filter((disk) => disk.path !== info.path),
-      info,
-    ];
+    diskOptions.value = [...diskOptions.value.filter((disk) => disk.path !== info.path), info];
     selectedPath.value = info.path;
+    ensureWorkflowDefaults();
   } catch (error) {
     window.alert(t(lang.value, "open_image_failed", { error }));
   }
@@ -310,11 +422,32 @@ async function scanSelected() {
   isScanning.value = true;
   try {
     scanResult.value = await invoke("scan_disk_path", { path: selectedPath.value });
-    activeTab.value = "analyze";
+    setWorkflowTab("analyze");
   } catch (error) {
     window.alert(t(lang.value, "scan_failed", { error }));
   } finally {
     isScanning.value = false;
+  }
+}
+
+async function previewFormatPlan() {
+  const request = buildFormatRequest(selectedDisk.value?.platform_id || selectedPath.value);
+  if (!request.path || !request.target || !request.filesystem || !request.volume_name) {
+    window.alert(t(lang.value, "choose_format_first"));
+    return;
+  }
+
+  isPreviewingFormat.value = true;
+  formatStatus.value = "";
+  try {
+    formatPreview.value = await invoke("preview_format_plan_command", {
+      request,
+    });
+    formatStatus.value = t(lang.value, "format_preview_ready");
+  } catch (error) {
+    formatStatus.value = t(lang.value, "format_failed", { error });
+  } finally {
+    isPreviewingFormat.value = false;
   }
 }
 
@@ -347,13 +480,7 @@ async function formatSelectedDisk() {
   formatStatus.value = "";
   try {
     const result = await invoke("format_disk_path", {
-      request: {
-        path: selectedPath.value,
-        target: selectedDisk.value,
-        filesystem,
-        volume_name: volumeName,
-        confirmation: formatConfirmation.value,
-      },
+      request: buildFormatRequest(),
     });
     formatStatus.value = t(lang.value, "format_success", {
       diskIdentifier: result.disk_identifier,
@@ -361,12 +488,150 @@ async function formatSelectedDisk() {
     });
     formatConfirmation.value = "";
     scanResult.value = null;
-    activeTab.value = "reports";
+    setWorkflowTab("reports");
     await loadDisks();
   } catch (error) {
     formatStatus.value = t(lang.value, "format_failed", { error });
   } finally {
     isFormatting.value = false;
+  }
+}
+
+async function diagnoseBootSector() {
+  const path = repairTargetPath.value.trim() || selectedPath.value;
+  if (!path) {
+    window.alert(t(lang.value, "choose_target_first"));
+    return;
+  }
+
+  isDiagnosing.value = true;
+  diagnosisStatus.value = "";
+  try {
+    bootDiagnoses.value = await invoke("diagnose_boot_sectors_command", { path });
+    diagnosisStatus.value = t(lang.value, "repair_diagnosis_ready");
+  } catch (error) {
+    diagnosisStatus.value = t(lang.value, "repair_failed", { error });
+  } finally {
+    isDiagnosing.value = false;
+  }
+}
+
+async function previewBootRepair() {
+  const path = repairTargetPath.value.trim() || selectedPath.value;
+  if (!path) {
+    window.alert(t(lang.value, "choose_target_first"));
+    return;
+  }
+
+  isPreviewingRepair.value = true;
+  diagnosisStatus.value = "";
+  try {
+    bootRepairPlans.value = await invoke("preview_boot_sector_repair_command", { path });
+    diagnosisStatus.value = t(lang.value, "repair_preview_ready");
+  } catch (error) {
+    diagnosisStatus.value = t(lang.value, "repair_failed", { error });
+  } finally {
+    isPreviewingRepair.value = false;
+  }
+}
+
+async function chooseRecoveryDestination() {
+  const selected = await openDialog({ directory: true, multiple: false });
+  if (selected) {
+    recoveryDestinationDir.value = selected;
+  }
+}
+
+async function recoverDeletedFiles() {
+  const sourcePath = recoverySourcePath.value.trim() || selectedPath.value;
+  if (!sourcePath || !recoveryDestinationDir.value.trim()) {
+    window.alert(t(lang.value, "choose_recovery_first"));
+    return;
+  }
+
+  isRecovering.value = true;
+  recoveryStatus.value = "";
+  try {
+    recoveryTranscript.value = await invoke("recover_deleted_files", {
+      source_path: sourcePath,
+      destination_dir: recoveryDestinationDir.value.trim(),
+    });
+    recoveryStatus.value = t(lang.value, "recovery_complete");
+  } catch (error) {
+    recoveryStatus.value = t(lang.value, "recovery_failed", { error });
+  } finally {
+    isRecovering.value = false;
+  }
+}
+
+async function chooseCarvingOutput() {
+  const selected = await openDialog({ directory: true, multiple: false });
+  if (selected) {
+    carvingOutputDir.value = selected;
+  }
+}
+
+async function carveFiles() {
+  const sourcePath = carvingSourcePath.value.trim() || selectedPath.value;
+  if (!sourcePath || !carvingOutputDir.value.trim() || selectedCarvingFamilies.value.length === 0) {
+    window.alert(t(lang.value, "choose_carving_first"));
+    return;
+  }
+
+  isCarving.value = true;
+  carvingStatus.value = "";
+  try {
+    carvingTranscript.value = await invoke("carve_files_command", {
+      source_path: sourcePath,
+      output_dir: carvingOutputDir.value.trim(),
+      families: selectedCarvingFamilies.value,
+    });
+    carvingStatus.value = t(lang.value, "carving_complete");
+  } catch (error) {
+    carvingStatus.value = t(lang.value, "carving_failed", { error });
+  } finally {
+    isCarving.value = false;
+  }
+}
+
+async function chooseImagingOutput() {
+  const selected = await saveDialog({
+    defaultPath: "disk-image.raw",
+    filters: [{ name: "Raw Image", extensions: ["raw", "img", "dd"] }],
+  });
+  if (selected) {
+    imagingOutputPath.value = selected;
+  }
+}
+
+async function imageDisk() {
+  const sourcePath = imagingSourcePath.value.trim() || selectedPath.value;
+  if (!sourcePath || !imagingOutputPath.value.trim()) {
+    window.alert(t(lang.value, "choose_imaging_first"));
+    return;
+  }
+
+  isImaging.value = true;
+  imagingStatus.value = "";
+  try {
+    imagingTranscript.value = await invoke("image_source_command", {
+      source_path: sourcePath,
+      output_path: imagingOutputPath.value.trim(),
+    });
+    imagingStatus.value = t(lang.value, "imaging_complete");
+  } catch (error) {
+    imagingStatus.value = t(lang.value, "imaging_failed", { error });
+  } finally {
+    isImaging.value = false;
+  }
+}
+
+async function copyCommand(command) {
+  try {
+    await navigator.clipboard.writeText(command);
+    automationStatus.value = t(lang.value, "command_copied");
+  } catch {
+    automationStatus.value = command;
   }
 }
 
@@ -397,6 +662,7 @@ async function exportScanReport() {
 onMounted(() => {
   loadDisks();
   loadFormatFilesystems();
+  ensureWorkflowDefaults();
 });
 </script>
 
@@ -409,6 +675,7 @@ onMounted(() => {
         <p class="subtitle">{{ t(lang, "subtitle") }}</p>
       </div>
       <div class="header-actions">
+        <span class="badge">{{ runtimeLabel }}</span>
         <div class="segmented" role="group" :aria-label="t(lang, 'theme_dark')">
           <button type="button" :class="{ active: theme === 'light' }" @click="setTheme('light')">
             {{ t(lang, "theme_light") }}
@@ -453,7 +720,7 @@ onMounted(() => {
       <main class="workspace-main">
         <nav class="tab-strip" role="tablist" :aria-label="t(lang, 'app_name')">
           <button
-            v-for="tab in tabs"
+            v-for="tab in workflowTabs"
             :key="tab.key"
             type="button"
             class="tab-button"
@@ -465,8 +732,27 @@ onMounted(() => {
         </nav>
 
         <div class="panel-stage">
+          <OverviewPanel
+            v-if="activeTab === 'overview'"
+            :lang="lang"
+            :runtime-label="runtimeLabel"
+            :selected-disk="selectedDisk"
+            :selected-disk-source-label="selectedDiskSourceLabel"
+            :selected-disk-access-label="selectedDiskAccessLabel"
+            :selected-disk-safety-label="selectedDiskSafetyLabel"
+            :scan-result="scanResult"
+            :format-size="formatSize"
+            :format-status="formatStatus"
+            :repair-status="diagnosisStatus"
+            :recovery-status="recoveryStatus"
+            :imaging-status="imagingStatus"
+            :carving-status="carvingStatus"
+            :automation-status="automationStatus"
+            @go-tab="setWorkflowTab"
+          />
+
           <AnalyzePanel
-            v-if="activeTab === 'analyze'"
+            v-else-if="activeTab === 'analyze'"
             :lang="lang"
             :scan-result="scanResult"
             :table-type-label="tableTypeLabel"
@@ -490,13 +776,93 @@ onMounted(() => {
             :format-confirmation="formatConfirmation"
             :format-confirmation-target="formatConfirmationTarget"
             :format-status="formatStatus"
+            :format-preview="formatPreview"
             :format-block-reason="formatBlockReason"
             :can-format="canFormat"
+            :can-preview-format="formatPreviewAllowed"
+            :is-previewing-format="isPreviewingFormat"
             :is-formatting="isFormatting"
             @update:selected-format-filesystem="selectedFormatFilesystem = $event"
             @update:format-volume-name="formatVolumeName = $event"
             @update:format-confirmation="formatConfirmation = $event"
+            @preview-format="previewFormatPlan"
             @format="formatSelectedDisk"
+          />
+
+          <RepairPanel
+            v-else-if="activeTab === 'repair'"
+            :lang="lang"
+            :selected-disk="selectedDisk"
+            :target-path="repairTargetPath"
+            :diagnosis-status="diagnosisStatus"
+            :diagnoses="bootDiagnoses"
+            :repair-plans="bootRepairPlans"
+            :is-diagnosing="isDiagnosing"
+            :is-previewing="isPreviewingRepair"
+            @update:target-path="repairTargetPath = $event"
+            @use-selected-target="repairTargetPath = selectedDisk?.path || ''"
+            @diagnose="diagnoseBootSector"
+            @preview-repair="previewBootRepair"
+          />
+
+          <RecoveryPanel
+            v-else-if="activeTab === 'recovery'"
+            :lang="lang"
+            :selected-disk="selectedDisk"
+            :source-path="recoverySourcePath"
+            :destination-dir="recoveryDestinationDir"
+            :recovery-status="recoveryStatus"
+            :recovery-transcript="recoveryTranscript"
+            :is-recovering="isRecovering"
+            @update:source-path="recoverySourcePath = $event"
+            @update:destination-dir="recoveryDestinationDir = $event"
+            @use-selected-target="recoverySourcePath = selectedDisk?.path || ''"
+            @choose-destination="chooseRecoveryDestination"
+            @recover="recoverDeletedFiles"
+          />
+
+          <CarvingPanel
+            v-else-if="activeTab === 'carving'"
+            :lang="lang"
+            :selected-disk="selectedDisk"
+            :source-path="carvingSourcePath"
+            :output-dir="carvingOutputDir"
+            :selected-families="selectedCarvingFamilies"
+            :carving-status="carvingStatus"
+            :carving-transcript="carvingTranscript"
+            :is-carving="isCarving"
+            @update:source-path="carvingSourcePath = $event"
+            @update:output-dir="carvingOutputDir = $event"
+            @update:selected-families="selectedCarvingFamilies = $event"
+            @use-selected-target="carvingSourcePath = selectedDisk?.path || ''"
+            @choose-output="chooseCarvingOutput"
+            @carve="carveFiles"
+          />
+
+          <ImagingPanel
+            v-else-if="activeTab === 'imaging'"
+            :lang="lang"
+            :selected-disk="selectedDisk"
+            :source-path="imagingSourcePath"
+            :output-path="imagingOutputPath"
+            :imaging-status="imagingStatus"
+            :imaging-transcript="imagingTranscript"
+            :is-imaging="isImaging"
+            @update:source-path="imagingSourcePath = $event"
+            @update:output-path="imagingOutputPath = $event"
+            @use-selected-target="imagingSourcePath = selectedDisk?.path || ''"
+            @choose-output="chooseImagingOutput"
+            @image="imageDisk"
+          />
+
+          <AutomationPanel
+            v-else-if="activeTab === 'automation'"
+            :lang="lang"
+            :runtime-label="runtimeLabel"
+            :selected-disk="selectedDisk"
+            :command-templates="commandTemplates"
+            :automation-status="automationStatus"
+            @copy-command="copyCommand"
           />
 
           <ReportsPanel
@@ -512,6 +878,7 @@ onMounted(() => {
             v-else
             :lang="lang"
             :theme="theme"
+            :runtime-label="runtimeLabel"
             @set-theme="setTheme"
             @set-language="setLanguage"
           />

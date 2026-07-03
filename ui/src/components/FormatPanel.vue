@@ -10,8 +10,11 @@ defineProps({
   formatConfirmation: { type: String, required: true },
   formatConfirmationTarget: { type: String, default: "" },
   formatStatus: { type: String, default: "" },
+  formatPreview: { type: Object, default: null },
   formatBlockReason: { type: String, default: "" },
   canFormat: { type: Boolean, default: false },
+  canPreviewFormat: { type: Boolean, default: false },
+  isPreviewingFormat: { type: Boolean, default: false },
   isFormatting: { type: Boolean, default: false },
 });
 
@@ -19,6 +22,7 @@ const emit = defineEmits([
   "update:selectedFormatFilesystem",
   "update:formatVolumeName",
   "update:formatConfirmation",
+  "preview-format",
   "format",
 ]);
 </script>
@@ -77,11 +81,18 @@ const emit = defineEmits([
         </div>
         <div class="button-row danger-row">
           <button
-          type="button"
-          class="danger"
-          :disabled="!canFormat || isFormatting"
-          @click="emit('format')"
-        >
+            type="button"
+            :disabled="!canPreviewFormat || isPreviewingFormat"
+            @click="emit('preview-format')"
+          >
+            {{ isPreviewingFormat ? t(lang, "previewing") : t(lang, "preview_format_plan") }}
+          </button>
+          <button
+            type="button"
+            class="danger"
+            :disabled="!canFormat || isFormatting"
+            @click="emit('format')"
+          >
             {{ isFormatting ? t(lang, "formatting") : t(lang, "format_disk") }}
           </button>
         </div>
@@ -89,6 +100,10 @@ const emit = defineEmits([
           {{ t(lang, "format_hint") }}
           <strong>{{ formatConfirmationTarget || "-" }}</strong>
         </p>
+        <div v-if="formatPreview" class="notice info">
+          <strong>{{ t(lang, "format_preview_title") }}</strong>
+          <p>{{ formatPreview.target_path }} · {{ formatPreview.filesystem }} · {{ formatPreview.steps?.length || 0 }} steps</p>
+        </div>
         <p v-if="formatStatus" class="format-status">{{ formatStatus }}</p>
       </div>
 

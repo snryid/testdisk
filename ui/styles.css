@@ -287,6 +287,12 @@ button:focus-visible {
   font-size: 0.78rem;
 }
 
+.muted-block {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -303,6 +309,166 @@ button:focus-visible {
 
 .button-row button {
   flex: 1 1 0;
+}
+
+.button-row.compact-row {
+  margin-top: 0;
+}
+
+.button-row.compact-row button {
+  flex: 0 0 auto;
+}
+
+.inline-field {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.inline-field input {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.quick-actions button {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.overview-grid,
+.workflow-grid {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.automation-grid {
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+}
+
+.stack-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.inner-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 0.8rem;
+}
+
+.inner-card h4 {
+  margin: 0;
+  font-size: 0.86rem;
+}
+
+.command-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.command-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 0.55rem 0.7rem;
+}
+
+.command-chip strong {
+  font-size: 0.8rem;
+}
+
+.command-chip span,
+.compact-metadata span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.compact-metadata {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.code-block {
+  margin: 0.45rem 0 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  overflow: auto;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.chip-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-3);
+  padding: 0.38rem 0.7rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.chip-option input {
+  width: auto;
+  margin: 0;
+}
+
+.workflow-status-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.workflow-status-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.7rem;
+  align-items: baseline;
+  padding: 0.54rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.workflow-status-list div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.workflow-status-list span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.workflow-status-list strong {
+  text-align: right;
+}
+
+.notice.info strong,
+.notice.warning strong,
+.notice.danger strong {
+  display: block;
+  margin-bottom: 0.1rem;
 }
 
 .notice {
@@ -391,6 +557,7 @@ button:focus-visible {
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   flex: 0 0 auto;
+  overflow-x: auto;
 }
 
 .tab-button {
@@ -399,6 +566,7 @@ button:focus-visible {
   border: 1px solid transparent;
   color: var(--muted);
   font-weight: 600;
+  flex: 0 0 auto;
 }
 
 .tab-button.active {
@@ -421,7 +589,8 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
-  overflow: hidden;
+  overflow: auto;
+  padding-right: 0.15rem;
 }
 
 .panel-toolbar {
@@ -563,7 +732,7 @@ tbody tr:hover td {
 }
 
 .badge {
-  color: var(--accent);
+  color: var(--text);
 }
 
 .danger-chip {
